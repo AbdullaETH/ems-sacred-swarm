@@ -154,6 +154,8 @@ def main():
              "## Context for this run", f"- project root: {os.path.abspath(a.project)} "
              "(open files there with Read, Grep, Glob; tag paths relative to it)",
              state_block(state, today)]
+    if a.role == "researcher":
+        parts.insert(-1, f"- research level for this run: {a.level} (only that section applies)")
 
     if a.role in ("scout", "appraiser", "critic"):
         parts += ["## Inventory digest (from scripts/inventory.py)",

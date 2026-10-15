@@ -134,9 +134,12 @@ def main():
             grades[tag_grade] += 1
         if any(re.match(r"^https?://", i, re.I) for i in items) and not tag_grade:
             urls_without_grade += 1
+        has_url = any(re.match(r"^https?://", i, re.I) for i in items)
         for item in items:
             if re.fullmatch(r"[ABC]", item):
                 continue
+            if has_url and re.fullmatch(r"(?i)snippet|undated|no date|\d{4}-\d{2}-\d{2}", item):
+                continue  # annotations of a URL source, not paths
             kind, reason = check(root, item)
             counts[kind] += 1
             if kind == "bad":
