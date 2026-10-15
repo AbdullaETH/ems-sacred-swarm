@@ -286,6 +286,29 @@ class Inventory(Base):
         self.assertFalse(any(d == "data" for d, _ in j["top_dirs"]))
 
 
+class AgentPrompt(Base):
+    def test_compact_prompt(self):
+        write(self.root, "main.py", "print(1)\n")
+        write(self.root, "docker-compose.yml", "x: " + "y" * 5000 + "\n")
+        self.commit()
+        os.makedirs(self.out)
+        script("inventory.py", self.root, "--out", os.path.join(self.out, "inventory.json"))
+        with open(os.path.join(self.tmp.name, "state.json"), "w", encoding="utf-8") as f:
+            json.dump({"country": "Kazakhstan", "city": "Almaty", "language": "ru",
+                       "currency": {"base": "USD", "local": "KZT"}}, f)
+        r = script("agent_prompt.py", "--role", "scout", "--project", self.root, "--out", self.out)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Role: scout", r.stdout)
+        self.assertIn("Almaty", r.stdout)
+        self.assertNotIn("y" * 200, r.stdout)  # manifest bodies are not pasted
+        self.assertIn("Stay under 450 words", r.stdout)
+        r = script("agent_prompt.py", "--role", "researcher", "--level", "M",
+                   "--project", self.root, "--out", self.out)
+        self.assertIn("## Level M", r.stdout)
+        self.assertNotIn("## Level L", r.stdout)
+        self.assertNotIn("## Level S", r.stdout)
+
+
 class RunPlan(unittest.TestCase):
     def total(self, *args):
         r = script("run_plan.py", *args)

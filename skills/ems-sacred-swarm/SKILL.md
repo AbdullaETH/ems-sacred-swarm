@@ -61,6 +61,8 @@ Then print the run plan: `python <skill>/scripts/run_plan.py --projects N --pres
 | researcher L, sizer, potential, demand | haiku | sonnet | sonnet |
 | collector, improver, sales-finance | sonnet | sonnet | sonnet |
 
+**haiku-main:** Haiku only gathers facts (scout, security, researcher S/M/L); every judgment role (appraiser, critic, referee, sizer, potential, demand, collector, improver, sales-finance) is done by you, the main model, following the same role file. No Sonnet runs. Use it when the user wants Haiku for legwork and the strongest model for conclusions.
+
 Lean option: when readiness is below 15/40 or the preset is economy, run appraiser and critic as one agent and skip research L unless the user asks.
 
 ## Phases
@@ -99,7 +101,7 @@ Scanner severity already depends on git state: a key that git tracks is `critica
 
 1. **Card** (step mode): agents, goal, models, what they read, what goes online, number of runs. Ask: run / skip / change model.
 2. **Gate:** `python <skill>/scripts/gate.py <out>/<slug>`.
-3. **Run:** Agent tool, `subagent_type: "Explore"`, model from the preset. Prompt = `agents/_common.md` + role file + exact input paths + report language + currency table. Independent agents in parallel (up to 5), dependent ones in sequence. Give file paths, never paste whole files into the prompt; cap the answer by the role's word limit. If sub-agents have no WebSearch in this harness, run research yourself with the same role prompt and caps.
+3. **Run:** Agent tool, `subagent_type: "Explore"` (never a fork of this conversation), model from the preset. Build the prompt with `python S/agent_prompt.py --role <role> --project P --out O [--level S|M|L] --file O/prompts/<role>.txt` and pass that text verbatim: common rules, the role file (only the asked research level), a compact digest of inventory/scan, region and currency from `state.json`, and the list of phase files the role may open. Add nothing from the conversation; if the agent needs more, it opens the listed files itself. Independent agents in parallel (up to 5), dependent ones in sequence. If sub-agents have no WebSearch in this harness, run research yourself with the same role prompt and caps.
 4. **Verify and re-rate:** save the text, run `verify_evidence.py` (bad tag = wrong claim: re-check). Agent severities are proposals: open the cited lines of every critical and downgrade what is not proven with `gate.py --rate` (`rubrics/severity.md`). Never edit `findings.json` by hand. Run the referee before any number leaves research.
 5. **Save** files yourself (sub-agents cannot write report files). Update `state.json` (`phases_done`, `fingerprint`).
 6. **Screen and checkpoint:** print the phase result in the chat; then summary, 1-3 pieces of advice, open medium findings, new ideas to `ideas.md`, and the question (continue / deeper / stop). In autopilot print the same and continue.
@@ -136,7 +138,8 @@ Rubric `rubrics/severity.md`; findings in `<out>/<slug>/findings.json`, managed 
 <out>/<slug>/
   state.json  findings.json  ideas.md
   SCREEN.md  REPORT-SHORT.md  REPORT-FULL.md  DEMAND-CHECK.md
-  phases/  (01-scout, 01-appraisal, 02-security, 03-weak, 04-research-s/m/l, 04-referee, 05-potential, 07-improve, 08-sales)
+  inventory.json  scan.json  prompts/  (script outputs and the exact agent prompts)
+  phases/  (01-scout, 01-appraisal, 02-security, 03-weak, 04-research-s/m/l, 04-referee, 05-sizer, 05-potential, 07-improve, 08-sales)
 ```
 
 Exports: `python <skill>/scripts/export_report.py <file.md> --txt --docx` (txt always; docx when pandoc is present, otherwise say so).
