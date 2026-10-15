@@ -26,7 +26,7 @@ SKIP_DIRS = {
 CODE_EXT = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".html",
     ".css", ".scss", ".php", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".cs",
-    ".cpp", ".c", ".h", ".dart", ".sql", ".sh", ".ps1", ".bat", ".lua",
+    ".cpp", ".c", ".h", ".dart", ".sql", ".sh", ".ps1", ".bat", ".lua", ".gd", ".gdshader", ".kts",
 }
 MANIFESTS = [
     "package.json", "pyproject.toml", "requirements.txt", "Pipfile", "go.mod",
@@ -42,7 +42,8 @@ SECRET_LIKE = re.compile(
     r"(?i)([A-Za-z0-9_.\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)"
     r"[A-Za-z0-9_.\-]*['\"]?)(\s*[:=]\s*)\S+")
 TEST_FILE_RE = re.compile(
-    r"(^test_.*\.py$|.*_test\.(py|go)$|.*\.(test|spec)\.[jt]sx?$)", re.I)
+    r"(^test_.*\.(py|gd)$|.*_test\.(py|go|gd)$|.*\.(test|spec)\.[jt]sx?$|.*Tests?\.(cs|kt|java)$)",
+    re.I)
 TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}
 
 

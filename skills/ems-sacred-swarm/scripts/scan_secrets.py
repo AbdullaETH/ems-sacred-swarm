@@ -43,7 +43,7 @@ SKIP_NAMES = {
 }
 CODE_EXT = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".html",
-    ".php", ".rb", ".go", ".rs", ".java", ".kt", ".cs", ".sh", ".ps1", ".bat",
+    ".php", ".rb", ".go", ".rs", ".java", ".kt", ".cs", ".sh", ".ps1", ".bat", ".gd",
 }
 MAX_FILE = 1_000_000
 MAX_LINE = 5000
