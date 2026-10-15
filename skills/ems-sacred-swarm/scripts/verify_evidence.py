@@ -138,8 +138,8 @@ def main():
         for item in items:
             if re.fullmatch(r"[ABC]", item):
                 continue
-            if has_url and re.fullmatch(r"(?i)snippet|undated|no date|\d{4}-\d{2}-\d{2}", item):
-                continue  # annotations of a URL source, not paths
+            if has_url and "/" not in item and not re.search(r":\d+(-\d+)?$", item):
+                continue  # "snippet", "22.01.2026", "snippet, 2026-01-22": notes on a URL, not paths
             kind, reason = check(root, item)
             counts[kind] += 1
             if kind == "bad":
