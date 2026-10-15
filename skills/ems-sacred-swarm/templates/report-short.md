@@ -35,12 +35,14 @@
 | medium | | |
 | weak | | |
 
-## Value ladder
-| Row | Potential annual revenue | Cost-to-rebuild floor | Asset price |
-|-----|--------------------------|-----------------------|-------------|
-| Now | | | |
-| After top blockers | | | |
-| At 100% | | | |
+## Value ladder and sale price
+| Row | What to do (hours) | Potential annual revenue | Cost-to-rebuild | Sale price | Method |
+|-----|--------------------|--------------------------|-----------------|------------|--------|
+| Now | - | | | | |
+| After small fixes | | | | | |
+| Maximum | | | | | |
+
+**What raises the price most** (price gain per hour): 1) ... 2) ... 3) ...
 
 Assumptions and sources: `phases/05-potential.md`. Not financial advice.
 

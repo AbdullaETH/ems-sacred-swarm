@@ -14,6 +14,9 @@ import subprocess
 import sys
 from collections import Counter
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from scan_secrets import git_ignored, redact  # noqa: E402  (same folder, stdlib only)
+
 SKIP_DIRS = {
     ".git", "node_modules", ".venv", "venv", "env", "__pycache__", "dist", "build",
     ".next", ".nuxt", "target", ".idea", ".vscode", "vendor", ".gradle", ".cache",
@@ -23,7 +26,7 @@ SKIP_DIRS = {
 CODE_EXT = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".html",
     ".css", ".scss", ".php", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".cs",
-    ".cpp", ".c", ".h", ".dart", ".sql", ".sh", ".ps1", ".bat", ".lua",
+    ".cpp", ".c", ".h", ".dart", ".sql", ".sh", ".ps1", ".bat", ".lua", ".gd", ".gdshader", ".kts",
 }
 MANIFESTS = [
     "package.json", "pyproject.toml", "requirements.txt", "Pipfile", "go.mod",
@@ -36,9 +39,11 @@ MAX_FILES = 60_000
 MARKER_RE = re.compile(
     r"\b(TODO|FIXME|XXX|HACK|NotImplemented\w*|lorem ipsum|placeholder)\b", re.I)
 SECRET_LIKE = re.compile(
-    r"(?i)\b(password|passwd|secret|token|api[_-]?key)\b(\s*[:=]\s*)\S+")
+    r"(?i)([A-Za-z0-9_.\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)"
+    r"[A-Za-z0-9_.\-]*['\"]?)(\s*[:=]\s*)\S+")
 TEST_FILE_RE = re.compile(
-    r"(^test_.*\.py$|.*_test\.(py|go)$|.*\.(test|spec)\.[jt]sx?$)", re.I)
+    r"(^test_.*\.(py|gd)$|.*_test\.(py|go|gd)$|.*\.(test|spec)\.[jt]sx?$|.*Tests?\.(cs|kt|java)$)",
+    re.I)
 TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}
 
 
@@ -58,7 +63,7 @@ def head(path, limit=1500):
             text = f.read(limit)
     except OSError:
         return ""
-    return SECRET_LIKE.sub(r"\1\2***", text)
+    return "\n".join(SECRET_LIKE.sub(r"\1\2***", redact(line)) for line in text.split("\n"))
 
 
 def main():
@@ -86,9 +91,13 @@ def main():
     root_names = set()
 
     entries = []
+    # git-ignored folders (data, models, build caches) are not the project
+    ign_dirs = git_ignored(root)[1] if git(root, "rev-parse", "--git-dir") else set()
     for dp, dns, fns in os.walk(root):
-        dns[:] = sorted(d for d in dns if d not in SKIP_DIRS)
         rel_dir = os.path.relpath(dp, root)
+        prefix = "" if rel_dir == "." else rel_dir.replace(os.sep, "/") + "/"
+        dns[:] = sorted(d for d in dns
+                        if d not in SKIP_DIRS and prefix + d not in ign_dirs)
         if rel_dir == ".":
             root_names = set(fns) | set(dns)
         if any(d.lower() in TEST_DIRS for d in dns):

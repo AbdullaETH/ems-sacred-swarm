@@ -21,7 +21,12 @@ PRESETS = {
                  "sonnet": ["scout", "appraiser", "critic", "security", "researcher_S", "researcher_M",
                             "researcher_L", "referee", "sizer", "potential", "demand", "collector",
                             "improver", "sales"]},
+    # facts by Haiku, every judgment by the main model (the orchestrator itself)
+    "haiku-main": {"haiku": ["scout", "security", "researcher_S", "researcher_M", "researcher_L"],
+                   "main": ["appraiser", "critic", "referee", "sizer", "potential", "demand",
+                            "collector", "improver", "sales"]},
 }
+MODELS = ("haiku", "sonnet", "main")
 PHASES = [
     ("1 state and readiness", ["scout", "appraiser"]),
     ("2 security gate", ["security"]),
@@ -51,9 +56,9 @@ def main():
         for r in roles:
             model_of[r] = model
 
-    rows, totals = [], {"haiku": 0, "sonnet": 0}
+    rows, totals = [], {m: 0 for m in MODELS}
     for title, roles in PHASES:
-        n = {"haiku": 0, "sonnet": 0}
+        n = {m: 0 for m in MODELS}
         for r in roles:
             if r.startswith("researcher_") and r[-1] not in levels:
                 continue
@@ -72,11 +77,13 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8") if hasattr(sys.stdout, "reconfigure") else None
     print(f"Run plan: {a.projects} project(s), preset {a.preset}, research levels {','.join(sorted(levels)) or '-'}"
           f"{', lean' if a.lean else ''}")
-    print(f"{'phase':28} {'haiku':>6} {'sonnet':>7}")
+    print(f"{'phase':28} {'haiku':>6} {'sonnet':>7} {'main':>5}")
     for title, n in rows:
-        print(f"{title:28} {n['haiku']:>6} {n['sonnet']:>7}")
+        print(f"{title:28} {n['haiku']:>6} {n['sonnet']:>7} {n['main']:>5}")
     total = totals["haiku"] + totals["sonnet"]
-    print(f"{'TOTAL agent runs':28} {totals['haiku']:>6} {totals['sonnet']:>7}   = {total}")
+    print(f"{'TOTAL agent runs':28} {totals['haiku']:>6} {totals['sonnet']:>7} {totals['main']:>5}   = {total}")
+    if totals["main"]:
+        print(f"main = steps the orchestrator does itself ({totals['main']}); they are not agent runs.")
     load = "low" if total <= 12 else ("medium" if total <= 40 else "high")
     print(f"Relative load: {load}. Scripts (inventory, secret scan, gate, evidence check) cost no model tokens.")
     return 0

@@ -97,11 +97,119 @@ class ScanSecrets(Base):
         self.assertFalse([f for f in data["findings"] if f["rule"] == "db-url-with-password"])
 
 
+    def by_rule(self, data, rule):
+        return [f for f in data["findings"] if f["rule"] == rule]
+
+    def test_web_build_folders_are_checked(self):
+        write(self.root, "frontend/dist/index.html", "<html></html>\n")
+        write(self.root, "frontend/dist/app.js.map", "{}\n")
+        write(self.root, "backend/build/lib/x.py", f'K = "{FAKE_AWS}"\n')  # compiler output, skipped
+        key = "AIza" + "SyA1234567890abcdefghijklmnopqrstuv"
+        write(self.root, "frontend/dist/app.js", "var a=1;" * 900 + f'var k="{key}";\n')
+        write(self.root, ".gitignore", "dist/\n")
+        self.commit()
+        data, raw = self.scan()
+        self.assertNotIn(key, raw)
+        self.assertTrue(self.by_rule(data, "web-folder-exposure"))
+        g = self.by_rule(data, "google-api-key")
+        self.assertTrue(g)
+        self.assertEqual(g[0]["severity"], "medium")  # ignored build output: critical once deployed
+
+    def test_git_status_decides_secret_severity(self):
+        write(self.root, ".gitignore", "secrets/\nlocal.json\n")
+        write(self.root, "secrets/k.py", f'K = "{FAKE_AWS}"\n')
+        write(self.root, "local.json", '{"k": "' + FAKE_AWS + '"}\n')
+        write(self.root, "README.md", "x\n")
+        self.commit()
+        write(self.root, "new.py", f'K = "{FAKE_AWS}"\n')  # untracked, not ignored
+        data, _ = self.scan()
+        aws = self.by_rule(data, "aws-access-key")
+        self.assertEqual(len(aws), 1)
+        files = {loc["file"] for loc in aws[0]["locations"]}
+        self.assertNotIn("secrets/k.py", files)  # ignored folders are not walked
+        self.assertEqual(aws[0]["severity"], "medium")  # worst location: untracked, not ignored
+        self.assertFalse(aws[0]["needs_rotation"])
+
+    def test_committed_env_without_secrets_is_not_critical(self):
+        write(self.root, ".env", "PORT=3000\nHOST=0.0.0.0\nLOG_LEVEL=info\n")
+        self.commit()
+        data, _ = self.scan()
+        env = self.by_rule(data, "env-committed")
+        self.assertEqual([f["severity"] for f in env], ["medium"])
+
+    def test_env_in_history(self):
+        val = "q8Zt" + "Lw3mVn7Xk2Rp9s"
+        write(self.root, ".env", f"API_KEY={val}\n")
+        write(self.root, "README.md", "x\n")
+        self.commit()
+        os.remove(os.path.join(self.root, ".env"))
+        write(self.root, ".gitignore", ".env\n")
+        self.commit("drop env")
+        data, raw = self.scan("--history", "10")
+        self.assertNotIn(val, raw)
+        hist = self.by_rule(data, "env-in-history")
+        self.assertTrue(hist)
+        self.assertEqual(hist[0]["severity"], "critical")
+
+    def test_password_prefix_is_not_shown(self):
+        scheme = "postgres" + "://"
+        write(self.root, "cfg.js", 'const a = "' + scheme + "admin:" + FAKE_DB_PW + '@db.internal/x";\n')
+        self.commit()
+        _, raw = self.scan()
+        self.assertNotIn(FAKE_DB_PW[:4], raw)
+
+    def test_hint_examples_are_redacted(self):
+        write(self.root, "run.py", f'os.system("deploy --key {FAKE_AWS}")\n')
+        self.commit()
+        _, raw = self.scan()
+        self.assertNotIn(FAKE_AWS, raw)
+
+
 class Gate(Base):
+    def ingest(self, findings, source="agent"):
+        path = os.path.join(self.tmp.name, "agent.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"findings": findings}, f)
+        return script("gate.py", self.out, "--ingest", path, "--source", source)
+
+    def test_severity_is_normalised(self):
+        r = self.ingest([{"title": "Admin open", "severity": "Critical", "file": "a.py"}])
+        self.assertEqual(json.loads(r.stdout)["status"], "BLOCK")
+        r = self.ingest([{"title": "x", "severity": "HIGH", "file": "b.py"},
+                         {"title": "y", "severity": "banana", "file": "c.py"}])
+        j = json.loads(r.stdout)
+        self.assertEqual(len(j["critical"]), 2)
+        self.assertEqual(len(j["medium"]), 1)
+
+    def test_ingest_markdown_report(self):
+        md = os.path.join(self.tmp.name, "sec.md")
+        with open(md, "w", encoding="utf-8") as f:
+            f.write("Narrative.\n\n```json\n" + json.dumps(
+                {"findings": [{"title": "No rate limit", "severity": "medium", "file": "api.py"}]})
+                + "\n```\n")
+        r = script("gate.py", self.out, "--ingest-md", md)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(json.loads(r.stdout)["status"], "NAG")
+
+    def test_manual_rating_and_close_survive_rescan(self):
+        write(self.root, "app.py", f'AWS = "{FAKE_AWS}"\nDEBUG = True\n')
+        self.commit()
+        self.scan("--history", "0")
+        scan_path = os.path.join(self.tmp.name, "scan.json")
+        j = json.loads(script("gate.py", self.out, "--ingest", scan_path, "--source", "script").stdout)
+        crit, med = j["critical"][0]["id"], j["medium"][0]["id"]
+        self.assertEqual(script("gate.py", self.out, "--rate", crit, "--severity", "weak").returncode, 1)
+        r = script("gate.py", self.out, "--rate", crit, "--severity", "weak",
+                   "--evidence", "test fixture, never a real key")
+        self.assertEqual(json.loads(r.stdout)["status"], "NAG")
+        script("gate.py", self.out, "--close", med, "--evidence", "dev-only flag")
+        j = json.loads(script("gate.py", self.out, "--ingest", scan_path, "--source", "script").stdout)
+        self.assertEqual(j["status"], "OK")
+
     def test_block_rotation_close(self):
         write(self.root, "app.py", f'AWS = "{FAKE_AWS}"\n')
         self.commit()
-        data, _ = self.scan()
+        data, _ = self.scan("--history", "0")
         scan_path = os.path.join(self.tmp.name, "scan.json")
         r = script("gate.py", self.out, "--ingest", scan_path, "--source", "script")
         self.assertEqual(r.returncode, 2)
@@ -109,7 +217,7 @@ class Gate(Base):
         # remove the secret, rescan: critical secrets stay blocked until rotation is confirmed
         write(self.root, "app.py", 'import os\nAWS = os.environ["AWS"]\n')
         self.commit("fix")
-        self.scan()
+        self.scan("--history", "0")
         r = script("gate.py", self.out, "--ingest", scan_path, "--source", "script")
         j = json.loads(r.stdout)
         self.assertEqual(j["status"], "BLOCK")
@@ -130,7 +238,7 @@ class VerifyEvidence(Base):
         md = os.path.join(self.tmp.name, "rep.md")
         with open(md, "w", encoding="utf-8") as f:
             f.write(
-                "ok [src: app.py:2]. range [src: app.py:1-3]. bad line [src: app.py:99]. "
+                "ok [src: app.py:2]. range [src: app.py:1-3]. list [src: app.py:1,2-3]. bad line [src: app.py:99]. "
                 "missing [src: nope.py:1]. escape [src: ../../etc/passwd:1]. "
                 "absent ok [src: absent:README.md]. absent wrong [src: absent:app.py]. "
                 f"commit [src: git:{head}]. hist [src: git:{head}:app.py:2]. "
@@ -139,7 +247,7 @@ class VerifyEvidence(Base):
         r = script("verify_evidence.py", self.root, md)
         j = json.loads(r.stdout)
         self.assertEqual(r.returncode, 1)
-        self.assertEqual(j["ok"], 5)
+        self.assertEqual(j["ok"], 6)
         self.assertEqual(sorted(b["tag"] for b in j["bad"]),
                          sorted(["app.py:99", "nope.py:1", "../../etc/passwd:1", "absent:app.py"]))
         self.assertEqual(j["source_grades"]["A"], 1)
@@ -162,6 +270,43 @@ class Inventory(Base):
         write(self.root, "main.py", "print(2)\n")
         r3 = script("inventory.py", self.root)
         self.assertNotEqual(a["fingerprint"], json.loads(r3.stdout)["fingerprint"])
+
+    def test_redaction_and_ignored_dirs(self):
+        pw = "hunter" + "2xyz77"
+        write(self.root, "docker-compose.yml",
+              f"services:\n  db:\n    environment:\n      POSTGRES_PASSWORD: {pw}\n      K: {FAKE_AWS}\n")
+        write(self.root, ".gitignore", "data/\n")
+        write(self.root, "data/big.py", "x = 1\n" * 50)
+        write(self.root, "main.py", "print(1)\n")
+        self.commit()
+        r = script("inventory.py", self.root)
+        self.assertNotIn(pw, r.stdout)
+        self.assertNotIn(FAKE_AWS, r.stdout)
+        j = json.loads(r.stdout)
+        self.assertFalse(any(d == "data" for d, _ in j["top_dirs"]))
+
+
+class AgentPrompt(Base):
+    def test_compact_prompt(self):
+        write(self.root, "main.py", "print(1)\n")
+        write(self.root, "docker-compose.yml", "x: " + "y" * 5000 + "\n")
+        self.commit()
+        os.makedirs(self.out)
+        script("inventory.py", self.root, "--out", os.path.join(self.out, "inventory.json"))
+        with open(os.path.join(self.tmp.name, "state.json"), "w", encoding="utf-8") as f:
+            json.dump({"country": "Kazakhstan", "city": "Almaty", "language": "ru",
+                       "currency": {"base": "USD", "local": "KZT"}}, f)
+        r = script("agent_prompt.py", "--role", "scout", "--project", self.root, "--out", self.out)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Role: scout", r.stdout)
+        self.assertIn("Almaty", r.stdout)
+        self.assertNotIn("y" * 200, r.stdout)  # manifest bodies are not pasted
+        self.assertIn("Stay under 450 words", r.stdout)
+        r = script("agent_prompt.py", "--role", "researcher", "--level", "M",
+                   "--project", self.root, "--out", self.out)
+        self.assertIn("## Level M", r.stdout)
+        self.assertNotIn("## Level L", r.stdout)
+        self.assertNotIn("## Level S", r.stdout)
 
 
 class RunPlan(unittest.TestCase):
