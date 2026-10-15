@@ -30,7 +30,7 @@ Every number carries a source grade: **A** official, **B** press or vendor with 
 ## Requirements and status
 
 - Claude Code with sub-agents (the skill launches `Explore` agents on `haiku`, and `sonnet` for synthesis). Web search for research phases. `gh` is optional (repository visibility).
-- Status: **v0.08**. v0.04 was run end to end on five real projects; v0.06 reworks the analysis (audience first, verdict, source grades, screen-first output). Scripts have regression tests in `tests/` (CI on Linux and Windows). Not yet adversarially tested against rule-bending prompts. Expect rough edges; issues and PRs are welcome.
+- Status: **v0.09**. v0.04 was run end to end on five real projects; v0.06 reworks the analysis (audience first, verdict, source grades, screen-first output). Scripts have regression tests in `tests/` (CI on Linux and Windows). Not yet adversarially tested against rule-bending prompts. Expect rough edges; issues and PRs are welcome.
 - Model presets: economy (Haiku gathers, Sonnet synthesises), balanced (Sonnet also for research L, audience and verdict), strong (Sonnet everywhere); any role can be overridden.
 - Agents return text, the main model writes the report files into your output folder.
 

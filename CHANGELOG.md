@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.09 - 2026-10-15
+- haiku-main preset: Haiku only gathers facts (scout, security, research), the main model does every judgment role; run_plan.py shows a `main` column.
+- agent_prompt.py: builds the exact sub-agent prompt (common rules + role + only the asked research level + compact inventory/scan digest + region/currency from state.json + allowed phase files). Sub-agents get ~1k tokens of prompt instead of pasted context; the orchestrator passes only the prompt file path.
+- verify_evidence.py: comma-separated line lists (`file:5,22-24`); `snippet` and dates inside URL tags are annotations, not paths.
+- Godot (`.gd`) scripts and tests are counted; eval-exec hint matches builtin calls only (no `regex.exec()` / `model.eval()`).
+- Run on 4 real projects end to end (phases 0-8) and 14 projects for phases 1-2.
+
 ## 0.08 - 2026-10-15
 - scan_secrets.py: severity follows git state (tracked = critical; untracked, ignored or no git = medium/weak with a trigger); git-ignored folders are not walked; deployable web build output (dist/build/out with index.html) is now scanned, including minified lines, and source maps there are reported at any depth; committed `.env` with config values only is medium, not critical; `.env` files removed from the tree but left in git history are found; history scan is on by default (300 commits); passwords are masked without a prefix; hint excerpts are redacted; Hugging Face tokens.
 - gate.py: agent severities are normalised (`Critical`, `high`, unknown) so nothing silently drops out of the gate; `--ingest-md` reads the JSON block of an agent report; `--rate` re-rates with evidence and survives re-scans; a manual close sticks across re-scans; `--reopen`.
