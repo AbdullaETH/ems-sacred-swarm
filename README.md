@@ -8,24 +8,30 @@ Cheap read-only Haiku sub-agents gather the facts. The main model verifies them,
 
 *Русская версия: [README.ru.md](README.ru.md)*
 
-## What it does
+## What it answers
+
+**Will this project take off, for whom, at what price, and what to fix first.** The answer is printed on screen as a verdict card first and saved to files second.
 
 | Phase | What happens |
 |-------|--------------|
-| 0 Setup | You grant permissions once: folders, GitHub (read-only), web search, output folder. Pick region and mode |
-| 1 State and readiness | Inventory of what the project is today, scored on an 8-criteria rubric |
-| 2 Security gate | Secret and exposure scan, manual checks, gate: weak = warning, medium = repeated at every checkpoint, critical = blocks |
+| 0 Setup | Permissions, country and city, currency (USD + yours), mode (step-by-step or autopilot), model preset, your honest effort numbers. Prints the run plan |
+| 1 State and readiness | What the project is today, scored on an 8-criteria rubric |
+| 2 Security gate | Secret and exposure scan, manual checks; weak = warning, medium = repeated at every checkpoint, critical = blocks |
 | 3 Weak spots | Blunt list of what is awful, absent or embryonic |
-| 4 Research | Level S (top products), M (your city, country, neighbours), L (global picture built on S and M) - you pick the level |
-| 5 Value | Value range now and at 100% readiness, with assumptions and confidence |
-| 6 Collect | One-page summary, then a full document on request (md, txt, docx) |
+| 4 Research | S: global base + local base + substitutes. M: your city and region in depth, with official audience statistics. L: global picture. Referee: cross-checks the levels |
+| 5 Audience and potential | Bottom-up audience funnel, willingness to pay, potential revenue per year, five criteria, verdict *take off / on condition / will not*, value ladder |
+| 5b Demand check | Who to ask, interview script, success threshold, a cheap test |
+| 6 Collect | Screen card, one-page report; full document on request (md, txt, docx) |
 | 7 Improve | Prioritised fix plan, idea backlog |
-| 8 Sell | Buyers, channels, pricing, deck and business-plan advice, review of your existing documents |
+| 8 Sell | Buyers, channels, price options inside the willingness-to-pay range, deck and plan advice |
+
+Every number carries a source grade: **A** official, **B** press or vendor with a date, **C** aggregator or snippet. Only A and B enter calculations.
 
 ## Requirements and status
 
 - Claude Code with sub-agents (the skill launches `Explore` agents on `haiku`, and `sonnet` for synthesis). Web search for research phases. `gh` is optional (repository visibility).
-- Status: **v0.05, tested end to end on five real projects** (phases 1-8, about 40 sub-agent runs). Scripts are regression-tested on a synthetic repository. Not yet adversarially tested against rule-bending prompts. Expect rough edges; issues and PRs are welcome.
+- Status: **v0.06**. v0.04 was run end to end on five real projects; v0.06 reworks the analysis (audience first, verdict, source grades, screen-first output). Scripts have regression tests in `tests/` (CI on Linux and Windows). Not yet adversarially tested against rule-bending prompts. Expect rough edges; issues and PRs are welcome.
+- Model presets: economy (Haiku gathers, Sonnet synthesises), balanced (Sonnet also for research L, audience and verdict), strong (Sonnet everywhere); any role can be overridden.
 - Agents return text, the main model writes the report files into your output folder.
 
 ## Quick start
@@ -63,10 +69,11 @@ Python 3.8+ is optional but recommended: the scripts do the first pass for free.
 ```
 skills/ems-sacred-swarm/
   SKILL.md          orchestrator (read by Claude)
-  agents/           role prompts: scout, appraiser, critic, security, researcher, valuer, collector, improver, sales-finance
-  rubrics/          readiness, severity, valuation
-  scripts/          inventory.py, scan_secrets.py, gate.py, verify_evidence.py
-  templates/        short and full report, ideas backlog
+  agents/           role prompts: scout, appraiser, critic, security, researcher, referee, sizer, potential, demand, collector, improver, sales-finance
+  rubrics/          readiness, severity, potential, currency
+  scripts/          inventory.py, scan_secrets.py, gate.py, verify_evidence.py, run_plan.py, export_report.py
+  templates/        screen card, short and full report, ideas backlog
+tests/              regression tests for the scripts (python -m unittest discover -s tests)
 ```
 
 ## Limits

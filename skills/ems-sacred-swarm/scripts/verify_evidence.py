@@ -3,7 +3,8 @@
 
 Usage: python verify_evidence.py <project_root> <report.md>
 
-Tags: [src: path/to/file.ext:LINE]  [src: path:START-END]  [src: https://url]
+Tags: [src: path/to/file.ext:LINE]  [src: path:START-END]  [src: https://url; A|B|C]
+      (the last item of a URL tag is its source grade; ungraded URLs are counted)
       [src: absent:path]               claim that a file does not exist
       [src: git:<commit>:<path>:LINE]  claim about a file in git history
 Several sources may share one tag, separated by ';'.
@@ -121,15 +122,26 @@ def main():
     with open(report, encoding="utf-8", errors="replace") as f:
         text = f.read()
     counts = {"ok": 0, "url": 0, "bad": 0}
+    grades = {"A": 0, "B": 0, "C": 0}
+    urls_without_grade = 0
     bad = []
     for tag in TAG_RE.findall(text):
-        for item in (s.strip() for s in tag.split(";") if s.strip()):
+        items = [s.strip() for s in tag.split(";") if s.strip()]
+        tag_grade = next((i for i in items if re.fullmatch(r"[ABC]", i)), None)
+        if tag_grade:
+            grades[tag_grade] += 1
+        if any(re.match(r"^https?://", i, re.I) for i in items) and not tag_grade:
+            urls_without_grade += 1
+        for item in items:
+            if re.fullmatch(r"[ABC]", item):
+                continue
             kind, reason = check(root, item)
             counts[kind] += 1
             if kind == "bad":
                 bad.append({"tag": item, "reason": reason})
     result = {
         "ok": counts["ok"], "urls_not_fetched": counts["url"], "bad": bad,
+        "source_grades": grades, "urls_without_grade": urls_without_grade,
         "unverified_marks": len(re.findall(r"\[UNVERIFIED\]", text)),
         "claims_without_any_tag_hint": "review manually if the report has few tags",
     }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.06 - 2026-10-15
+- Output on screen first (screen card), files second; answers one question: will it take off, for whom, at what price, what to fix first.
+- Audience-first analysis: bottom-up funnel (sizer), willingness to pay, potential revenue, five criteria and a verdict (potential), value ladder; cost to rebuild is only a floor.
+- Source grades A/B/C on every number; referee role cross-checks research levels; currency rules (USD + user's currency, central-bank rate with date).
+- Research S now covers global base, local base and substitutes; M goes deep on the region with official audience statistics.
+- Demand check role (interview script, threshold, cheap test); developer's own effort numbers; git active days in inventory.
+- Model presets (economy, balanced, strong), step-by-step or autopilot mode, run_plan.py, export_report.py (txt, docx via pandoc).
+- verify_evidence.py: source grades. Tests in tests/ and CI on Linux and Windows.
+
 ## 0.05 - 2026-10-15
 - README (EN, RU): requirements, status, quick start, trigger words. Repository made public.
 

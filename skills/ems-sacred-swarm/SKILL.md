@@ -1,96 +1,122 @@
 ---
 name: ems-sacred-swarm
-description: Use when the user says "Sacred Swarm", "EMS" or "Examen Machinarum Sacrum", or wants a staged audit of software projects - current state, readiness to sell, security gaps, competitors, market, rough valuation, sales advice. RU - священный рой, рой агентов, рой, ЕМС, аудит проекта, проверь проект, готовность к продаже, оценка стоимости, конкуренты.
+description: Use when the user says "Sacred Swarm", "EMS" or "Examen Machinarum Sacrum", or wants a staged audit of software projects - current state, readiness to sell, security gaps, competitors, audience and willingness to pay, will-it-take-off verdict, price range, sales advice. RU - священный рой, рой агентов, рой, ЕМС, аудит проекта, проверь проект, стрельнёт ли проект, готовность к продаже, оценка стоимости, конкуренты.
 ---
 
 # EMS - Sacred Swarm (Examen Machinarum Sacrum)
 
-Also known as **Sacred Swarm**, **Священный Рой**, **Рой агентов**, **ЕМС**. When the user calls it by any of these names, run this skill. Staged, evidence-based audit of software projects. Cheap read-only Haiku sub-agents gather facts; **you** (the main model) verify, decide and talk to the user. A critical security finding stops everything except fixing it.
+Also known as **Sacred Swarm**, **Священный Рой**, **Рой агентов**, **ЕМС**. When the user calls it by any of these names, run this skill.
 
-`<skill>` below = the directory this SKILL.md was loaded from. Role prompts are in `<skill>/agents/`, scoring rules in `<skill>/rubrics/`, helpers in `<skill>/scripts/` (Python 3, stdlib only, read-only).
+Staged, evidence-based audit of software projects. Cheap read-only sub-agents gather facts; **you** (the main model) verify, decide and talk to the user. The point of the whole run is one answer: **will this project take off, for whom, at what price, and what to fix first.**
+
+`<skill>` = the directory this SKILL.md was loaded from: role prompts `<skill>/agents/`, rules `<skill>/rubrics/`, helpers `<skill>/scripts/` (Python 3, stdlib only, read-only), templates `<skill>/templates/`.
 
 ## Hard rules
 
 1. **Read-only on the user's projects.** Never write to, build, run, install or execute project code. Sub-agents are launched as `Explore` (no Edit/Write); only you write, and only into the output folder.
-2. **Permissions first, once.** In phase 0 ask for: project folders, GitHub via `gh` (read-only), web search, output folder, storing the output path in `~/.claude/ems-sacred-swarm/config.json`. Anything not granted is skipped and listed as a gap in the report. `gh` is read-only (`gh repo view`, GET calls) and reaches private repositories only if the user says so. If a project folder is outside the directories this session may read, request access before launching agents.
-3. **Evidence or silence.** Every claim carries `[src: path:line]`, `[src: URL]` or `[UNVERIFIED]`. Check agent output with `scripts/verify_evidence.py`; remove or mark claims that fail.
-4. **No invented numbers.** Valuation is a range with assumptions and confidence. Market figures need a URL and a date.
-5. **Never reveal secrets** - not in reports, chat or agent prompts. Masked form only (`AKIA…(20 chars)`).
-6. **Web queries stay generic.** Describe the product category and region; do not send the project's private name, code or client names unless the user approves.
-7. **Blunt, not cruel.** "This is a prototype, not a product" is allowed. Insults, sarcasm and softening padding are not.
-8. **Language:** talk and write reports in the user's language. Agent prompts stay English; tell each agent the report language.
-9. **Checkpoint after every phase** (protocol below). Never chain phases silently.
+2. **Permissions first, once** (phase 0): project folders, `gh` read-only (private repositories only if the user says so), web search, output folder. Not granted = skipped and listed as a gap. If a project folder is outside the directories this session may read, request access before launching agents.
+3. **Evidence or silence.** Every claim carries `[src: path:line]`, `[src: URL; A|B|C]` or `[UNVERIFIED]`. Run `scripts/verify_evidence.py` on what you save.
+4. **Grade every number.** A = official statistics, filings, laws; B = press, vendor pages with date; C = aggregators, snippets, undated pages. Only A and B go into calculations. C is shown as "unreliable".
+5. **No invented numbers.** Ranges with stated assumptions. A multiple, a share or an adoption rate needs a dated A/B source or is labelled "assumption" with its reason.
+6. **Never reveal secrets** in reports, chat or agent prompts (masked form only).
+7. **Web queries stay generic:** product category and region, never the private project name, code or client names.
+8. **Blunt, not cruel.** "This is a prototype, not a product" is allowed. Insults and padding are not.
+9. **Language:** the user's language; agent prompts stay English with the report language stated.
+10. **Show on screen first, then save.** At every checkpoint and at the end print the result in the chat (the screen card from `templates/screen-card.md`). Files are the archive and the backup, never the only place the answer lives. Never answer "see the file".
+11. **Short.** Screen card ≤ 25 lines. No filler: every sentence carries a fact, a number or a decision.
+
+## Phase 0 - setup (ask once)
+
+Ask, with AskUserQuestion where it fits:
+- permissions (rule 2); output folder (kept outside the projects);
+- **country, city, language**; currency: base **USD** plus the currency of the user's country (detect from the answers, confirm). Rates only from the central bank of that country with the date (`rubrics/currency.md`);
+- **mode:** step-by-step (default: card before each phase, question after) or autopilot (approve a run plan once; stops only on a critical finding or an ambiguity);
+- **preset:** economy (default), balanced, strong (table below), or per-role override;
+- security first pass: scripts, Haiku, or both;
+- **the developer's honest numbers:** calendar span, real hours per week, number of people, hours already spent, whether the work will continue. These feed the effort estimate; git only shows when commits happened.
+
+Then print the run plan: `python <skill>/scripts/run_plan.py --projects N --preset P --levels S,M,L` (number of agent runs by model, no invented token counts).
+
+## Presets (role -> model)
+
+| Role | economy | balanced | strong |
+|------|---------|----------|--------|
+| scout, appraiser, critic, security, researcher S and M, referee | haiku | haiku | sonnet |
+| researcher L, sizer, potential, demand | haiku | sonnet | sonnet |
+| collector, improver, sales-finance | sonnet | sonnet | sonnet |
+
+Lean option: when readiness is below 15/40 or the preset is economy, run appraiser and critic as one agent and skip research L unless the user asks.
 
 ## Phases
 
-| # | Phase | Agents (model) | Saves | Ask the user |
-|---|-------|----------------|-------|--------------|
-| 0 | Setup | none | `state.json` | permissions, region(s), mode (one project / queue), synthesis model, security first pass |
-| 1 | State & readiness | `scout` + `appraiser` (haiku) | `phases/01-state.md` | continue? |
-| 2 | Security gate | scripts + `security` (haiku) | `phases/02-security.md`, `findings.json` | close findings? |
-| 3 | Weak spots | `critic` (haiku) | `phases/03-weak.md` | continue? |
-| 4 | Research | `researcher` S → M → L (haiku) | `phases/04-research-{s,m,l}.md` | which levels |
-| 5 | Value | `valuer` (haiku) | `phases/05-valuation.md` | continue? |
-| 6 | Collect | `collector` (synthesis model) | `REPORT-SHORT.md`, then `REPORT-FULL.md` | write the full document? format txt / md / docx |
-| 7 | Improve | `improver` (synthesis model) | `phases/07-improve.md`, `ideas.md` | which fixes first |
-| 8 | Sell | `sales-finance` (synthesis model) | `phases/08-sales.md` | existing deck / business plan to review? |
+| # | Phase | Roles | Saves | Screen |
+|---|-------|-------|-------|--------|
+| 0 | Setup | - | `state.json` | run plan |
+| 1 | State and readiness | scout, appraiser | `phases/01-*.md` | label, score, 3 facts |
+| 2 | Security gate | scripts, security | `phases/02-security.md`, `findings.json` | gate status |
+| 3 | Weak spots | critic | `phases/03-weak.md` | top 5 |
+| 4 | Research | researcher S (global base + local base + substitutes), M (region deep: players, channels, regulation, statistics), L (global), then referee | `phases/04-research-{s,m,l}.md`, `04-referee.md` | competitors, spread flags |
+| 5 | Audience and potential | sizer, potential | `phases/05-potential.md` | verdict, price, audience |
+| 5b | Demand check | demand | `DEMAND-CHECK.md` | who to ask, threshold |
+| 6 | Collect | collector | `SCREEN.md`, `REPORT-SHORT.md`, `REPORT-FULL.md` on request | screen card |
+| 7 | Improve | improver | `phases/07-improve.md`, `ideas.md` | top fixes |
+| 8 | Sell | sales-finance | `phases/08-sales.md` | channels, price options |
 
-Synthesis model defaults to `sonnet`; the user may choose `haiku` in phase 0 for maximum economy. Research level S runs on request, M and L only after the user picks them in phase 4 (L reads the S and M outputs; final market synthesis is done by the collector, not by Haiku).
+Gate (2) runs before 3-8; with status BLOCK only phase 7 may run.
 
-## Phase protocol (every phase)
+## Phase protocol
 
-1. **Card.** Show: agents, goal, what they read / which sites they search, load (low / medium / high - never invented token counts). Ask: run / adjust / skip. Use AskUserQuestion.
-2. **Gate.** `python <skill>/scripts/gate.py <out>/<slug>`. Status `BLOCK` → only phase 7 may run. Status `NAG` → continue, but see checkpoint.
-3. **Run.** Agent tool, `subagent_type: "Explore"`, `model: "haiku"` (or the synthesis model). Prompt = `agents/_common.md` + `agents/<role>.md` + exact input paths + report language. Independent agents in parallel (max 4); dependent ones in sequence.
-4. **Verify and re-rate.** Save the agent text first, then `python <skill>/scripts/verify_evidence.py <project_root> <file>`. A bad tag is a wrong claim: re-check it against the project and fix or drop it. Agent severities are proposals: open the cited lines of every `critical` and downgrade anything whose condition is not proven (calibration rules in `rubrics/severity.md`). Spot-check two other claims yourself.
-5. **Save.** Write the phase file yourself. Sub-agents never write: the harness blocks report-file writes from sub-agents anyway, so phases 6-8 also return text and you save `REPORT-SHORT.md`, `07-improve.md`, `08-sales.md`, `ideas.md`.
-6. **Checkpoint.** (a) ≤5-line summary, (b) 1-3 concrete pieces of advice, (c) every open `medium` finding from the gate, with "close it now?", (d) new improvement ideas appended to `ideas.md`, (e) AskUserQuestion: continue / go deeper / stop.
+1. **Card** (step mode): agents, goal, models, what they read, what goes online, number of runs. Ask: run / skip / change model.
+2. **Gate:** `python <skill>/scripts/gate.py <out>/<slug>`.
+3. **Run:** Agent tool, `subagent_type: "Explore"`, model from the preset. Prompt = `agents/_common.md` + role file + exact input paths + report language + currency table. Independent agents in parallel (up to 5), dependent ones in sequence.
+4. **Verify and re-rate:** save the text, run `verify_evidence.py` (bad tag = wrong claim: re-check). Agent severities are proposals: open the cited lines of every critical and downgrade what is not proven (`rubrics/severity.md`). Run the referee before any number leaves research.
+5. **Save** files yourself (sub-agents cannot write report files).
+6. **Screen and checkpoint:** print the phase result in the chat; then summary, 1-3 pieces of advice, open medium findings, new ideas to `ideas.md`, and the question (continue / deeper / stop).
+
+## Potential and verdict (phase 5)
+
+Rubric: `rubrics/potential.md`. Order is fixed: **audience first** (bottom-up, official statistics), **willingness to pay** (analog prices, dated, one currency), **potential revenue**, **five criteria** (audience size, willingness to pay, competition strength, differentiation, time to first sale) -> verdict *стрельнёт / при условии / не стрельнёт* with confidence and the single biggest unknown. Cost to rebuild is a floor, never the headline. "Four paying customers" is not a verdict: audience potential decides.
 
 ## Security gate
 
-Rubric: `rubrics/severity.md`. Findings live in `<out>/<slug>/findings.json`, managed only through `scripts/gate.py`.
+Rubric `rubrics/severity.md`; findings in `<out>/<slug>/findings.json`, managed only through `scripts/gate.py`.
 
 | Level | Behaviour |
 |-------|-----------|
-| weak | Listed in the report, no interruption |
-| medium | Repeated at **every** checkpoint until closed |
-| critical | `BLOCK`: phases 3-6 and 8 refuse to run; only phase 7 (fixing) is allowed |
+| weak | Listed, no interruption |
+| medium | Repeated at every checkpoint until closed |
+| critical | BLOCK: only phase 7 may run |
 
-- No override, no "accept the risk" for critical.
-- A leaked secret is not closed by deleting it. After removal it becomes `pending_rotation`; close only when the user confirms rotation: `gate.py <dir> --close ID --evidence "..."`.
-- Re-run the scan after fixes: `scan_secrets.py` → `gate.py --ingest scan.json --source script`. Script findings that disappear are closed automatically; agent findings close only with fresh evidence.
-- A script finding you proved false is closed the same way, with the proof as evidence (and fix the scanner rule).
+- No override for critical. A leaked secret is closed only after rotation: `gate.py <dir> --close ID --evidence "..."`.
+- A script finding you proved false is closed the same way with the proof as evidence (and fix the scanner rule).
 - Ideas the user does not want to do now go to `ideas.md`; the gate still applies.
 
 ## Economy
 
-- Scripts first: `inventory.py` and `scan_secrets.py` cost almost nothing. Agents receive their JSON, not raw trees.
-- Agents get compact inputs, a word cap and (researchers) a search cap. Never let two agents read the same thing.
-- Cache: `inventory.py` returns a `fingerprint`. If it matches `state.json`, offer to reuse phases 1-2.
-- Queue mode: finish one project before the next; for "scan all first" run phases 1-2 for every project, show a comparison table, let the user pick who goes deeper.
-- If the user has no Python: the `security` agent does the first pass with Grep/Glob; say that it is slower and less thorough.
+- Scripts first (`inventory.py`, `scan_secrets.py`); agents get compact inputs and word/search caps.
+- Cache: `inventory.py` returns a `fingerprint`; if it matches `state.json`, offer to reuse phases 1-2.
+- Queue mode: finish one project before the next, or "scan all first": phases 1-2 for every project, a comparison table on screen, the user picks who goes deeper.
+- Without Python the security agent works with Grep (slower, less thorough).
 
 ## Output layout
 
 ```
 <out>/<slug>/
-  state.json      # phases done, permissions, region, language, fingerprint
-  findings.json   # security + critic findings (gate.py owns it)
-  ideas.md        # backlog of improvement ideas, never lost
-  phases/         # one file per phase
-  REPORT-SHORT.md
-  REPORT-FULL.md
+  state.json  findings.json  ideas.md
+  SCREEN.md  REPORT-SHORT.md  REPORT-FULL.md  DEMAND-CHECK.md
+  phases/  (01-scout, 01-appraisal, 02-security, 03-weak, 04-research-s/m/l, 04-referee, 05-potential, 07-improve, 08-sales)
 ```
 
-Templates: `templates/`. Start a new project with `ideas.md` from `templates/ideas.md`.
+Exports: `python <skill>/scripts/export_report.py <file.md> --txt --docx` (txt always; docx when pandoc is present, otherwise say so).
 
 ## Red flags - stop and fix
 
 | Thought | Reality |
 |---------|---------|
-| "Critical finding, but let's just look at the market quickly" | Gate says BLOCK. Fix first. |
-| "The agent said it, so it's true" | Run verify_evidence.py. No tag = no claim. |
-| "A single price estimate is cleaner" | Range or nothing. |
-| "Run all three research levels, just in case" | Show the card, let the user choose. |
-| "I'll write the report from memory of the phase" | Read the phase files; they are the source of truth. |
-| "The project is bad, let me phrase it gently" | State the verdict from the rubric, with evidence. |
+| "The report is in the file, no need to show it" | Rule 10. Print the screen card. |
+| "Critical finding, but quickly look at the market" | Gate says BLOCK. Fix first. |
+| "A grade C number will do for the estimate" | Only A and B enter calculations. |
+| "Total market is $6 billion, so potential is big" | Bottom-up funnel or nothing. |
+| "Cost to rebuild is the value" | It is the floor. Potential decides. |
+| "Four paying customers prove it" | They prove nothing about the audience. |
+| "Run all three research levels, just in case" | Show the plan and let the user choose. |

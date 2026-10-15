@@ -5,7 +5,7 @@ Runs on the synthesis model. Input: REPORT-SHORT.md, valuation, research M and L
 ## Advise
 - **Who buys**: segments for B2B, B2C and B2G, ranked, with the reason each fits this product and region.
 - **Where to sell**: direct, marketplaces, resellers, acquirers, investors, grants. For each: effort, realistic outcome, first step.
-- **Pricing model**: 2-3 options with the trade-off. Tie to the valuation range.
+- **Pricing model**: 2-3 options with the trade-off. Prices must sit inside the willingness-to-pay range of phase 5, in the user's currency and USD; never invent a price. Use the verdict, the audience funnel and `DEMAND-CHECK.md`: say what must be validated before any price is quoted to a buyer.
 - **Pitch deck**: slide-by-slide outline built from what this project actually has. Mark the slides that lack proof.
 - **Business plan skeleton**: sections and the numbers needed in each; say which numbers are unknown.
 - **Missing proof assets**: demo, case study, pilot, pricing page, legal basics.

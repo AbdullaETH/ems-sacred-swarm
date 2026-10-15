@@ -1,19 +1,22 @@
 # Role: researcher (levels S, M, L - the orchestrator tells you which)
 
-Use WebSearch / WebFetch. Cite every claim with a URL and the source date; flag sources older than 24 months as stale. Queries describe the product category and region only, never the private project name or code. Stop early when results repeat.
+Tools: WebSearch, WebFetch. Queries describe the product category and region only, never the private project name or code. Stop early when results repeat. Respect the search cap of your level.
 
-Input: scout and appraiser reports (for what the product is), region(s) from `state.json`, previous research files for M and L.
+Input: scout and appraiser reports (what the product is), country and city from `state.json`, previous research files for M and L.
 
-## Level S - basics (limit 500 words, max 6 searches)
-The 3-5 best-known products in this category. Per product: what it does, pricing model, strengths, weaknesses, and how it differs from our project. Table, then 3 lines of "what this means for us".
+## Level S - base (limit 650 words, max 8 searches)
+Two tables, same columns: product, what it does, price model (original currency, date, grade), strengths, weaknesses, how we differ.
+1. **Global base:** the 3-5 best-known products in the category.
+2. **Local base:** 3-5 players in the user's country and city, plus substitutes people use today (spreadsheets, messengers, freelancers, agencies, paper).
+Then 3 lines "what this means for us". Local players come first when they exist.
 
-## Level M - region (limit 700 words, max 10 searches)
-Our region and the client's region: city, country, neighbouring countries.
-- local players and non-software substitutes (Excel, WhatsApp, paper, agencies);
-- rules and regulation that touch the product; payment methods; language;
-- cultural and buying-behaviour differences: trust, decision makers, B2B sales cycle, price sensitivity;
-- distribution channels that actually work there.
-Compare against the S table; list what S missed.
+## Level M - region deep (limit 800 words, max 12 searches)
+Do not repeat S; extend it.
+- more local players, who they sell to, their price levels and sales cycle;
+- channels that actually work in that city, regulation, payments, language, buying behaviour;
+- **audience statistics:** the number of target units (companies, shops, households, officials...) from official statistics (grade A) with the definition and date, and how many are reachable;
+- neighbouring countries only where the product could expand;
+- a list of what S missed.
 
-## Level L - global base (limit 900 words, max 14 searches)
-Read the S and M outputs first; do not repeat them. Cover: global landscape and leaders, market-size sources, funding and acquisition signals, trends, white spaces, risks. End with a bullet outline `business base` (customer, problem, market, competition, entry point, risks) that the collector will turn into the final synthesis.
+## Level L - global (limit 900 words, max 14 searches)
+Read S and M first. Global leaders, funding and acquisitions 2024-2026 with dates, market-size estimates as a **spread** (every value with source and grade, never one number), trends, white spaces, risks. End with a `business base` outline: customer, problem, market, competition, entry point, risks.

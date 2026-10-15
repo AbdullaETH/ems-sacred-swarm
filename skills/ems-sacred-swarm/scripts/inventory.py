@@ -171,6 +171,18 @@ def main():
             "remote": re.sub(r"//[^/@\s]+@", "//***@", remote),
             "uncommitted_files": len((git(root, "status", "--porcelain") or "").splitlines()),
         }
+        dates = sorted(set((git(root, "log", "--format=%cs") or "").split()))
+        git_info["active_days"] = len(dates)
+        git_info["first_day"] = dates[0] if dates else None
+        git_info["last_day"] = dates[-1] if dates else None
+        if len(dates) > 1:
+            from datetime import date
+            try:
+                a = date.fromisoformat(dates[0])
+                b = date.fromisoformat(dates[-1])
+                git_info["span_days"] = (b - a).days + 1
+            except ValueError:
+                pass
         fp.update(str(git_info.get("head")).encode())
 
     readme = next((n for n in sorted(root_names) if n.lower().startswith("readme")), None)
