@@ -86,7 +86,8 @@ DEBUG_RE = re.compile(r"(?i)(\bDEBUG\s*=\s*True\b|\bapp\.run\([^)]*debug\s*=\s*T
 CORS_RE = re.compile(
     r"""(?i)(access-control-allow-origin['"]?\s*[:,]\s*['"]?\*|origin\s*:\s*['"]\*['"])""")
 HINT_RULES = [
-    ("eval-exec", re.compile(r"\b(?:eval|exec)\s*\(")),
+    # builtin eval/exec only: not regex.exec(), model.eval(), def exec(
+    ("eval-exec", re.compile(r"(?<![.\w])(?<!def )(?:eval|exec)\s*\((?!\s*\))")),
     ("shell-call", re.compile(r"\bos\.system\(|shell\s*=\s*True|child_process")),
     ("html-injection", re.compile(r"\.innerHTML\s*=|dangerouslySetInnerHTML")),
     ("tls-verify-off", re.compile(r"verify\s*=\s*False|rejectUnauthorized\s*:\s*false")),
