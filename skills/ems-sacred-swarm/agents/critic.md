@@ -18,3 +18,4 @@ Rules:
 - Do not repeat security findings; reference their ids.
 - Do not propose fixes (that is the improver's job). One short "what is missing" clause is enough.
 - Maximum 12 items. Rank by impact.
+- Before calling something awful, check the project's own docs for a deliberate, dated owner decision; if there is one, list it as an accepted risk with the decision cited.

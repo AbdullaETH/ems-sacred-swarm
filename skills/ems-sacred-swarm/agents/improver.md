@@ -13,4 +13,6 @@ Security first: for every critical or medium finding give the exact remediation,
 
 End with "ideas for later": items that are good but not now, formatted as lines to append to `ideas.md`.
 
+Never recommend a destructive step (deleting copies, rotating every password, rewriting history) without citing what in the source proves it is needed; for accepted risks propose the cheapest mitigation instead.
+
 No filler, no motivational text. At most 15 items.

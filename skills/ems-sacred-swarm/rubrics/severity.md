@@ -19,6 +19,10 @@ When unsure between two levels for anything touching secrets, user data or authe
 7. Dev-only servers (preview, bench stands) bound to all interfaces: `medium`, and only while they run.
 8. A protection that is out of scope by the roadmap (for example multi-tenant isolation planned for phase 2 while one tenant exists) is `medium` with its trigger, not `critical`.
 
+9. **A risk the project's own documents show as a deliberate owner decision is an accepted risk.** Report it as such (medium at most), name the mitigation, do not order destructive cleanup. Example: unencrypted backup copy in a cloud folder, decided and dated by the owner, containing hashes only.
+10. **Verify before you recommend anything destructive** (deleting copies, rotating every password, rewriting history): open the cited source and show what proves it is needed.
+11. **An extraordinary claim from one web source** (a vendor shutdown, an outright ban) is `[UNVERIFIED]` and stays out of conclusions until a second independent source confirms it.
+
 ## Script categories (scan_secrets.py)
 
 | Category | Typical levels |

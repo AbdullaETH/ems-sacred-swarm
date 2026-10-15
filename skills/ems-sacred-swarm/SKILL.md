@@ -43,7 +43,7 @@ Synthesis model defaults to `sonnet`; the user may choose `haiku` in phase 0 for
 2. **Gate.** `python <skill>/scripts/gate.py <out>/<slug>`. Status `BLOCK` → only phase 7 may run. Status `NAG` → continue, but see checkpoint.
 3. **Run.** Agent tool, `subagent_type: "Explore"`, `model: "haiku"` (or the synthesis model). Prompt = `agents/_common.md` + `agents/<role>.md` + exact input paths + report language. Independent agents in parallel (max 4); dependent ones in sequence.
 4. **Verify and re-rate.** Save the agent text first, then `python <skill>/scripts/verify_evidence.py <project_root> <file>`. A bad tag is a wrong claim: re-check it against the project and fix or drop it. Agent severities are proposals: open the cited lines of every `critical` and downgrade anything whose condition is not proven (calibration rules in `rubrics/severity.md`). Spot-check two other claims yourself.
-5. **Save.** Write the phase file (agents never write).
+5. **Save.** Write the phase file yourself. Sub-agents never write: the harness blocks report-file writes from sub-agents anyway, so phases 6-8 also return text and you save `REPORT-SHORT.md`, `07-improve.md`, `08-sales.md`, `ideas.md`.
 6. **Checkpoint.** (a) ≤5-line summary, (b) 1-3 concrete pieces of advice, (c) every open `medium` finding from the gate, with "close it now?", (d) new improvement ideas appended to `ideas.md`, (e) AskUserQuestion: continue / go deeper / stop.
 
 ## Security gate

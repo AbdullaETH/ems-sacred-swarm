@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.04 - 2026-10-15
+- Full run of phases 1-8 on five real projects; report files are written by the orchestrator (sub-agent writes are blocked by the harness).
+- scan_secrets.py: local DB URLs are medium/weak, Cyrillic placeholders, git-ignored untracked .env skipped.
+- severity.md: calibration rules 9-11 (accepted risks, verify before destructive advice, single-source extraordinary claims).
+- critic, improver, common prompts: check deliberate owner decisions, no destructive advice without proof.
+
 ## 0.03 - 2026-10-15
 - Russian triggers (Священный Рой, Рой агентов, ЕМС).
 - Tested on 5 real projects; scanner: skips git-ignored untracked .env, local DB URLs are medium/weak, Cyrillic placeholders, test-path generic secrets are weak.
