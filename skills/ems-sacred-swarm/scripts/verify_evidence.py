@@ -89,8 +89,9 @@ def check(root, item):
     path, line = item, None
     if ":" in item:
         head, tail = item.rsplit(":", 1)
-        if LINE_RE.match(tail.strip()):
-            path, line = head, tail.strip()
+        parts = [x.strip() for x in tail.split(",")]
+        if all(LINE_RE.match(x) for x in parts):  # "12", "3-9" or "5,22-24"
+            path, line = head, parts
     path = path.strip().strip("`\"'")
     full = os.path.realpath(os.path.join(root, path))
     real_root = os.path.realpath(root)
@@ -105,12 +106,13 @@ def check(root, item):
     if not os.path.isfile(full):
         return "bad", "file not found"
     if line:
-        m = LINE_RE.match(line)
-        start = int(m.group(1))
-        end = int(m.group(2) or m.group(1))
         total = line_count(full)
-        if start < 1 or end < start or end > total:
-            return "bad", f"line out of range (file has {total} lines)"
+        for part in line:
+            m = LINE_RE.match(part)
+            start = int(m.group(1))
+            end = int(m.group(2) or m.group(1))
+            if start < 1 or end < start or end > total:
+                return "bad", f"line out of range (file has {total} lines)"
     return "ok", None
 
 

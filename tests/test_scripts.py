@@ -238,7 +238,7 @@ class VerifyEvidence(Base):
         md = os.path.join(self.tmp.name, "rep.md")
         with open(md, "w", encoding="utf-8") as f:
             f.write(
-                "ok [src: app.py:2]. range [src: app.py:1-3]. bad line [src: app.py:99]. "
+                "ok [src: app.py:2]. range [src: app.py:1-3]. list [src: app.py:1,2-3]. bad line [src: app.py:99]. "
                 "missing [src: nope.py:1]. escape [src: ../../etc/passwd:1]. "
                 "absent ok [src: absent:README.md]. absent wrong [src: absent:app.py]. "
                 f"commit [src: git:{head}]. hist [src: git:{head}:app.py:2]. "
@@ -247,7 +247,7 @@ class VerifyEvidence(Base):
         r = script("verify_evidence.py", self.root, md)
         j = json.loads(r.stdout)
         self.assertEqual(r.returncode, 1)
-        self.assertEqual(j["ok"], 5)
+        self.assertEqual(j["ok"], 6)
         self.assertEqual(sorted(b["tag"] for b in j["bad"]),
                          sorted(["app.py:99", "nope.py:1", "../../etc/passwd:1", "absent:app.py"]))
         self.assertEqual(j["source_grades"]["A"], 1)
