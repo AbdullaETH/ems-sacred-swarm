@@ -153,6 +153,7 @@ Exports: `python <skill>/scripts/export_report.py <file.md> --txt --docx` (txt a
 | "A grade C number will do for the estimate" | Only A and B enter calculations. |
 | "Total market is $6 billion, so potential is big" | Bottom-up funnel or nothing. |
 | "Cost to rebuild is the value" | It is the floor. Potential decides. |
+| "No A/B comparables, so no sale price" | The sale price is never empty: rebuild × discount or profit × dated multiple, labelled. Plus what raises it, with hours. |
 | "Four paying customers prove it" | They prove nothing about the audience. |
 | "Every project scored 12/25" | Anchoring. Re-check each criterion against its anchors (rubrics/potential.md). |
 | "Hours from lines of code" | Use git active days and ask the developer; lines are a weak proxy. |

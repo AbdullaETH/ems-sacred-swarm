@@ -35,10 +35,18 @@ Verdict: **стрельнёт** 18-25; **при условии** 12-17 (list the
 
 ## 6. Value ladder
 
-| Row | Potential annual revenue | Cost-to-rebuild floor | Asset price |
-|-----|--------------------------|-----------------------|-------------|
-| Now | range | hours x rate range | only with A/B comparables |
-| After top blockers fixed | range | range | same rule |
-| At 100% | range | range | same rule |
+| Row | What has to be done (hours) | Potential annual revenue | Cost-to-rebuild | **Sale price (range)** | Method |
+|-----|-----------------------------|--------------------------|-----------------|------------------------|--------|
+| Now | - | range | low-high | always filled | see below |
+| After small fixes (weeks) | list + hours | range | | always filled | |
+| Maximum (what a buyer pays most for) | list + hours | range | | always filled | |
 
-Cost to rebuild = hours x rate; hours from the developer's numbers and active days, rate from a dated source or a stated assumption. A multiple of revenue is allowed only with a dated A/B benchmark. If a needed input is missing, write which one and how to get it. Not financial advice: say so once.
+**The sale price column is never empty.** The user asks "for how much can I sell it now and after work"; "no comparables" is not an answer. Pick the method by stage and label it:
+
+- **No revenue:** price = cost-to-rebuild × buyer discount 10-30% (assumption: a buyer pays for saved time, not for your hours), adjusted for transferability (docs, tests, deploy without the author). Cost-to-rebuild is a range: low = git active days × realistic hours (AI-assisted rebuild), high = code size at a conventional pace (state the pace). Rate: local market salary from a dated source (job sites, hub reports), converted per hour.
+- **With revenue:** price = annual profit (SDE) × marketplace multiple from a dated A/B source (for example Flippa H1 2026: SaaS average 2.47x profit, top quartile 4.06x). A multiple of revenue only with its own A/B benchmark. Less than 6 months of payment history: use the low end.
+- **Strategic buyer** (a competitor or integrator who needs exactly this): may pay above both; name who and why, never put it in the base number.
+
+Then list **what raises the price most**, ranked by price gain per hour of work (typically: first paying users and payment history > retention metrics > transferability (docs, deploy without the author, no secrets on personal machines) > features). Every item: hours, expected effect on the price row.
+
+If a needed input is missing, write which one and how to get it. Not financial advice: say so once.
