@@ -22,9 +22,24 @@ Cheap read-only Haiku sub-agents gather the facts. The main model verifies them,
 | 7 Improve | Prioritised fix plan, idea backlog |
 | 8 Sell | Buyers, channels, pricing, deck and business-plan advice, review of your existing documents |
 
+## Requirements and status
+
+- Claude Code with sub-agents (the skill launches `Explore` agents on `haiku`, and `sonnet` for synthesis). Web search for research phases. `gh` is optional (repository visibility).
+- Status: **v0.05, tested end to end on five real projects** (phases 1-8, about 40 sub-agent runs). Scripts are regression-tested on a synthetic repository. Not yet adversarially tested against rule-bending prompts. Expect rough edges; issues and PRs are welcome.
+- Agents return text, the main model writes the report files into your output folder.
+
+## Quick start
+
+1. Install (below).
+2. Say: *"Run Sacred Swarm on `<path to your project>`"* or *"audit my project before I try to sell it"*.
+3. Answer the phase-0 questions (folders, region, language, mode). After every phase you get a short summary, advice and a question; research depth (S / M / L) is your choice.
+4. Reports land in `<output>/<project>/`: `REPORT-SHORT.md`, `phases/`, `findings.json`, `ideas.md`.
+
+Trigger words: *Sacred Swarm, EMS, Examen Machinarum Sacrum*, and in Russian *Священный Рой, Рой агентов, ЕМС, аудит проекта*.
+
 ## Install
 
-Copy the skill folder to your Claude Code skills directory:
+Clone and copy the skill folder to your Claude Code skills directory:
 
 ```bash
 cp -r skills/ems-sacred-swarm ~/.claude/skills/ems-sacred-swarm

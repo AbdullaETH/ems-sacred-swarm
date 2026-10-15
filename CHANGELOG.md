@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.05 - 2026-10-15
+- README (EN, RU): requirements, status, quick start, trigger words. Repository made public.
+
 ## 0.04 - 2026-10-15
 - Full run of phases 1-8 on five real projects; report files are written by the orchestrator (sub-agent writes are blocked by the harness).
 - scan_secrets.py: local DB URLs are medium/weak, Cyrillic placeholders, git-ignored untracked .env skipped.
