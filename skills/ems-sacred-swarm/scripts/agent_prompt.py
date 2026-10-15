@@ -167,6 +167,8 @@ def main():
     if a.role == "researcher":
         files += LEVEL_PREVIOUS[a.level]
     paths = [os.path.join(out, "phases", f) for f in files]
+    if a.role == "security":
+        paths.append(os.path.join(out, "scan.json"))  # full scan for line-by-line triage
     paths = [p for p in paths if os.path.isfile(p)]
     paths += [os.path.join(SKILL, "rubrics", r) for r in RUBRICS.get(a.role, [])]
     if paths:
