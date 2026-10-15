@@ -3,10 +3,16 @@
 
 Usage: python scan_secrets.py <project_root> [--history N] [--out scan.json]
 
-Secrets are never printed: values are masked as `AKIA…(20 chars)`.
-Output JSON: {"scopes": [...], "findings": [...], "hints": [...]} - feed it to
-gate.py --ingest. `hints` are risky patterns for the security agent to triage;
-they do not affect the gate.
+Secrets are never printed: values are masked as `AKIA…(20 chars)` (passwords
+as `***(12 chars)`, no prefix). Output JSON: {"scopes": [...], "findings": [...],
+"hints": [...]} - feed it to gate.py --ingest. `hints` are risky patterns for
+the security agent to triage; they do not affect the gate.
+
+Severity depends on where a value lives: tracked by git (or shipped in a web
+bundle) = leaked; untracked, git-ignored or outside git = a risk with a trigger.
+Git-ignored folders are not walked, except deployable web build output.
+--history N (default 300) also scans the last N commits for provider secrets
+and for .env files that were committed and later removed.
 """
 import argparse
 import hashlib
@@ -20,8 +26,11 @@ SKIP_DIRS = {
     ".git", "node_modules", ".venv", "venv", "env", "__pycache__", ".next", ".nuxt",
     "target", ".idea", ".vscode", "vendor", ".gradle", ".cache", "coverage",
     ".pytest_cache", ".mypy_cache", "bower_components", ".svn", ".hg", "Pods",
-    ".terraform", ".dart_tool", "site-packages", "dist", "build",
+    ".terraform", ".dart_tool", "site-packages",
 }
+# build output is walked only when it looks like a deployable web bundle:
+# keys and source maps shipped to browsers are a leak even if git ignores them
+BUILD_DIRS = {"dist", "build", "out"}
 SKIP_EXT = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg", ".mp4", ".mov", ".mp3",
     ".wav", ".woff", ".woff2", ".ttf", ".otf", ".eot", ".zip", ".gz", ".tar", ".7z",
@@ -52,6 +61,7 @@ PROVIDER_RULES = [
     ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9\-]{10,}")),
     ("stripe-live-key", re.compile(r"\b[sr]k_live_[0-9a-zA-Z]{16,}")),
     ("telegram-bot-token", re.compile(r"\b\d{8,10}:[A-Za-z0-9_\-]{35}\b")),
+    ("huggingface-token", re.compile(r"\bhf_[A-Za-z0-9]{34,}\b")),
     ("private-key-block", re.compile(
         r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----")),
     ("db-url-with-password", re.compile(
@@ -68,6 +78,8 @@ PLACEHOLDER_RE = re.compile(
     r"<[^>]+>|\$\{|\{\{|process\.env|os\.environ|getenv|\*{3,}|\.\.\.|todo|"
     r"password|secret|none|null|undefined|123456|test|"
     r"парол|секрет|ключ|токен|пример|твой|ваш|замени|вставь)")
+SECRET_KEY_RE = re.compile(
+    r"(?i)(key|token|secret|pass|pwd|auth|credential|dsn|private|salt|cookie|session|webhook)")
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal",
                "db", "postgres", "mysql", "mariadb", "redis", "mongo"}
 DEBUG_RE = re.compile(r"(?i)(\bDEBUG\s*=\s*True\b|\bapp\.run\([^)]*debug\s*=\s*True)")
@@ -90,10 +102,13 @@ KEY_FILE_RE = re.compile(
 DATA_FILE_RE = re.compile(r"(\.sqlite3?$|\.db$|^dump.*\.sql$|^backup.*\.(sql|zip)$)", re.I)
 ENV_RE = re.compile(r"^\.env(\..+)?$")
 ENV_EXAMPLE_RE = re.compile(r"\.(example|sample|template|dist)$", re.I)
+SEVERITY_ORDER = ("critical", "medium", "weak")
+# rules whose value is a password chosen by a person: show no prefix at all
+NO_PREFIX_RULES = {"db-url-with-password", "hardcoded-secret", "env-in-history"}
 
 
-def mask(value):
-    return f"{value[:4]}…({len(value)} chars)"
+def mask(value, show=4):
+    return f"{value[:show]}…({len(value)} chars)" if show else f"***({len(value)} chars)"
 
 
 def sha(text):
@@ -104,7 +119,7 @@ def git(root, *args, check=False):
     try:
         r = subprocess.run(
             ["git", "-C", root, *args], capture_output=True, text=True,
-            timeout=30, encoding="utf-8", errors="replace")
+            timeout=60, encoding="utf-8", errors="replace")
         if check:
             return r.returncode == 0
         return r.stdout if r.returncode == 0 else None
@@ -112,34 +127,34 @@ def git(root, *args, check=False):
         return None if not check else False
 
 
-class Collector:
-    def __init__(self):
-        self.findings = {}
-        self.hints = {}
+def git_ignored(root):
+    """Return (ignored_files, ignored_dirs) relative to root, as git sees them."""
+    out = git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard",
+              "--directory") or ""
+    files, dirs = set(), set()
+    for p in out.split("\0"):
+        if p:
+            (dirs if p.endswith("/") else files).add(p.rstrip("/"))
+    return files, dirs
 
-    def add(self, rule, severity, category, title, file, line, scope,
-            value=None, needs_rotation=False, fix=None, excerpt=None, in_test=False):
-        fid = sha(f"{rule}|{value if value is not None else file}")[:10]
-        loc = {"file": file, "line": line, "scope": scope}
-        if fid in self.findings:
-            locs = self.findings[fid]["locations"]
-            if loc not in locs and len(locs) < 5:
-                locs.append(loc)
-            if scope == "tree":
-                self.findings[fid]["scope"] = "tree"
-            return
-        self.findings[fid] = {
-            "id": fid, "severity": severity, "category": category, "rule": rule,
-            "title": title, "file": file, "line": line, "scope": scope,
-            "locations": [loc], "source": "script", "needs_rotation": needs_rotation,
-            "in_test_path": in_test, "excerpt": excerpt, "fix_hint": fix,
-        }
 
-    def hint(self, rule, file, line, text):
-        h = self.hints.setdefault(rule, {"rule": rule, "count": 0, "examples": []})
-        h["count"] += 1
-        if len(h["examples"]) < 5:
-            h["examples"].append({"file": file, "line": line, "text": text.strip()[:140]})
+def is_web_bundle(path):
+    try:
+        names = set(os.listdir(path))
+    except OSError:
+        return False
+    return bool(names & {"index.html", "assets", "_next", "static"})
+
+
+def has_web_child(path):
+    """git collapses a folder holding only ignored files (frontend/ with just
+    dist/ in it); look one level down before pruning it."""
+    try:
+        subs = [e for e in os.scandir(path) if e.is_dir()]
+    except OSError:
+        return False
+    return any(e.name in WEB_DIRS and (e.name not in BUILD_DIRS or is_web_bundle(e.path))
+               for e in subs)
 
 
 def is_placeholder(value):
@@ -162,6 +177,55 @@ def provider_matches(line):
             yield rule, value
 
 
+def redact(text):
+    """Mask every secret-looking value in a line (excerpts and hints)."""
+    for rule, value in list(provider_matches(text)):
+        text = text.replace(value, mask(value, 0 if rule in NO_PREFIX_RULES else 4))
+    m = JWT_RE.search(text)
+    if m:
+        text = text.replace(m.group(0), mask(m.group(0)))
+    m = GENERIC_RE.search(text)
+    if m:
+        text = text.replace(m.group(1), mask(m.group(1), 0))
+    return text
+
+
+class Collector:
+    def __init__(self):
+        self.findings = {}
+        self.hints = {}
+
+    def add(self, rule, severity, category, title, file, line, scope,
+            value=None, needs_rotation=False, fix=None, excerpt=None, in_test=False):
+        fid = sha(f"{rule}|{value if value is not None else file}")[:10]
+        loc = {"file": file, "line": line, "scope": scope}
+        if fid in self.findings:
+            f = self.findings[fid]
+            if loc not in f["locations"] and len(f["locations"]) < 5:
+                f["locations"].append(loc)
+            if scope == "tree":
+                f["scope"] = "tree"
+            # the same value in several places: the worst place decides
+            if SEVERITY_ORDER.index(severity) < SEVERITY_ORDER.index(f["severity"]):
+                f.update(severity=severity, category=category, title=title, file=file,
+                         line=line, needs_rotation=needs_rotation, fix_hint=fix,
+                         excerpt=excerpt, in_test_path=in_test)
+            return
+        self.findings[fid] = {
+            "id": fid, "severity": severity, "category": category, "rule": rule,
+            "title": title, "file": file, "line": line, "scope": scope,
+            "locations": [loc], "source": "script", "needs_rotation": needs_rotation,
+            "in_test_path": in_test, "excerpt": excerpt, "fix_hint": fix,
+        }
+
+    def hint(self, rule, file, line, text):
+        h = self.hints.setdefault(rule, {"rule": rule, "count": 0, "examples": []})
+        h["count"] += 1
+        if len(h["examples"]) < 5:
+            h["examples"].append({"file": file, "line": line,
+                                  "text": redact(text.strip())[:140]})
+
+
 def classify(rule, value, line, in_test):
     """Return (severity, needs_rotation). A DB URL pointing at a local host is a
     dev credential, not a leaked production secret."""
@@ -172,32 +236,53 @@ def classify(rule, value, line, in_test):
     return "critical", True
 
 
-def scan_line(c, line, rel, lineno, ext):
+def by_state(severity, rotate, fix, state, web):
+    """Adjust a content finding to where the file lives. Only a value that git
+    tracks (or that ships in a web bundle) has leaked; elsewhere it is a risk."""
+    if state == "tracked" or severity == "weak":
+        return severity, rotate, fix
+    if state == "ignored" and web:
+        return ("medium" if severity == "critical" else severity), False, (
+            f"{fix} Ignored by git but inside web build output: critical once deployed.")
+    if state == "ignored":
+        return "weak", False, f"{fix} Git-ignored local file: keep it out of copies you hand over."
+    trigger = ("critical once committed" if state == "untracked"
+               else "no git here: critical when the folder is shared, sold or pushed")
+    return ("medium" if severity == "critical" else severity), False, f"{fix} Not leaked yet, {trigger}."
+
+
+def scan_line(c, line, rel, lineno, ext, state="tracked", web=False):
     in_test = bool(TEST_PATH_RE.search(rel))
-    redacted = line.strip()
+    long_line = len(line) > MAX_LINE  # minified bundles: provider patterns only
+    shown = redact(line[:400].strip() if long_line else line.strip())[:160]
     for rule, value in provider_matches(line):
-        shown = redacted.replace(value, mask(value))[:160]
         sev, rotate = classify(rule, value, line, in_test)
         fix = ("Rotate the credential, remove it from code and history, load it from the environment."
                if rotate else "Local dev credential: keep it out of committed files, use .env.")
-        c.add(rule, sev, "secret" if rotate else "secret-generic",
-              f"{rule} in source" if rotate else "Local DB URL with password in source",
+        sev, rotate, fix = by_state(sev, rotate, fix, state, web)
+        c.add(rule, sev, "secret" if sev == "critical" else "secret-generic",
+              f"{rule} in source" if state == "tracked" else f"{rule} in {state} file",
               rel, lineno, "tree", value=value, needs_rotation=rotate, fix=fix,
               excerpt=shown, in_test=in_test)
+    if long_line:
+        return
     m = JWT_RE.search(line)
     if m:
-        c.add("jwt-in-code", "medium", "secret-generic", "JWT-like token in source",
-              rel, lineno, "tree", value=m.group(0), needs_rotation=False,
-              fix="Confirm whether this token is public by design (e.g. anon key); otherwise rotate.",
-              excerpt=redacted.replace(m.group(0), mask(m.group(0)))[:160], in_test=in_test)
+        sev, _, fix = by_state(
+            "medium", False,
+            "Confirm whether this token is public by design (e.g. anon key); otherwise rotate.",
+            state, web)
+        c.add("jwt-in-code", sev, "secret-generic", "JWT-like token in source",
+              rel, lineno, "tree", value=m.group(0), needs_rotation=False, fix=fix,
+              excerpt=shown, in_test=in_test)
     m = GENERIC_RE.search(line)
     if m and not is_placeholder(m.group(1)):
-        v = m.group(1)
-        c.add("hardcoded-secret", "weak" if in_test else "medium", "secret-generic",
-              "Hard-coded password or key-like value", rel, lineno, "tree", value=v,
-              fix="Move to environment variables; rotate if it is real.",
-              excerpt=redacted.replace(v, mask(v))[:160], in_test=in_test)
-    if ext in CODE_EXT:
+        sev, _, fix = by_state("weak" if in_test else "medium", False,
+                               "Move to environment variables; rotate if it is real.", state, web)
+        c.add("hardcoded-secret", sev, "secret-generic",
+              "Hard-coded password or key-like value", rel, lineno, "tree",
+              value=m.group(1), fix=fix, excerpt=shown, in_test=in_test)
+    if ext in CODE_EXT and state != "ignored":
         if DEBUG_RE.search(line):
             c.add("debug-mode-on", "medium", "config", "Debug mode enabled in code",
                   rel, lineno, "tree", value=f"{rel}:{lineno}",
@@ -211,22 +296,45 @@ def scan_line(c, line, rel, lineno, ext):
                 c.hint(rule, rel, lineno, line)
 
 
-def env_has_real_values(path):
+def env_pair(raw):
+    raw = raw.strip()
+    if not raw or raw.startswith("#") or "=" not in raw:
+        return None, None
+    key, value = raw.split("=", 1)
+    return key.replace("export ", "").strip(), value.strip().strip("'\"")
+
+
+def env_secret_value(key, value):
+    """True when an env assignment looks like a real secret, not plain config."""
+    if not value:
+        return False
+    if any(True for _ in provider_matches(value)):
+        return True
+    if is_placeholder(value):
+        return False
+    return bool(SECRET_KEY_RE.search(key)) and len(value) >= 6
+
+
+def env_kind(path):
+    """'secret' (real secret-like values), 'config' (real values, none of them
+    secret-like) or 'placeholder'."""
+    kind = "placeholder"
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for raw in f:
-                raw = raw.strip()
-                if not raw or raw.startswith("#") or "=" not in raw:
+                key, value = env_pair(raw)
+                if key is None:
                     continue
-                value = raw.split("=", 1)[1].strip().strip("'\"")
+                if env_secret_value(key, value):
+                    return "secret"
                 if value and not is_placeholder(value):
-                    return True
+                    kind = "config"
     except OSError:
         pass
-    return False
+    return kind
 
 
-def scan_history(root, depth, c):
+def scan_history(root, depth, c, tracked):
     cmd = ["git", "-C", root, "log", "--all", "-n", str(depth), "-p", "-U0",
            "--no-color", "--diff-filter=AM", "--format=@@COMMIT %h"]
     try:
@@ -234,33 +342,48 @@ def scan_history(root, depth, c):
     except Exception:
         return False
     commit, path, seen = "?", "?", 0
-    for raw in p.stdout:
-        seen += 1
-        if seen > 5_000_000:
-            break
-        line = raw.decode("utf-8", "replace").rstrip("\n")
-        if line.startswith("@@COMMIT "):
-            commit = line[9:]
-        elif line.startswith("+++ b/"):
-            path = line[6:]
-        elif line.startswith("+") and not line.startswith("+++") and len(line) < MAX_LINE:
-            for rule, value in provider_matches(line[1:]):
-                if classify(rule, value, line[1:], False)[1] is False:
-                    continue  # local dev DB URL: not worth a history finding
-                c.add(rule, "critical", "secret", f"{rule} in git history",
-                      f"(history) {commit}:{path}", None, "history", value=value,
-                      needs_rotation=True,
-                      fix="Rotate the credential; history rewrite alone does not undo a leak.",
-                      excerpt=line[1:].strip().replace(value, mask(value))[:160])
-    p.kill()
+    try:
+        for raw in p.stdout:
+            seen += 1
+            if seen > 5_000_000:
+                break
+            line = raw.decode("utf-8", "replace").rstrip("\n")
+            if line.startswith("@@COMMIT "):
+                commit = line[9:]
+            elif line.startswith("+++ b/"):
+                path = line[6:]
+            elif line.startswith("+") and not line.startswith("+++") and len(line) < MAX_LINE:
+                text = line[1:]
+                for rule, value in provider_matches(text):
+                    if classify(rule, value, text, False)[1] is False:
+                        continue  # local dev DB URL: not worth a history finding
+                    c.add(rule, "critical", "secret", f"{rule} in git history",
+                          f"(history) {commit}:{path}", None, "history", value=value,
+                          needs_rotation=True,
+                          fix="Rotate the credential; history rewrite alone does not undo a leak.",
+                          excerpt=redact(text.strip())[:160])
+                base = path.rsplit("/", 1)[-1]
+                if (ENV_RE.match(base) and not ENV_EXAMPLE_RE.search(base)
+                        and path not in tracked):
+                    key, value = env_pair(text)
+                    if key and env_secret_value(key, value):
+                        c.add("env-in-history", "critical", "secret",
+                              "Environment file with secrets is in git history",
+                              f"(history) {commit}:{path}", None, "history", value=value,
+                              needs_rotation=True,
+                              fix=f"Rotate {key}; the file is gone from the tree but not from history.",
+                              excerpt=f"{key}={mask(value, 0)}")
+    finally:
+        p.kill()
+        p.wait()
     return True
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("root")
-    ap.add_argument("--history", type=int, default=0,
-                    help="also scan the last N commits for provider-specific secrets")
+    ap.add_argument("--history", type=int, default=300,
+                    help="also scan the last N commits (0 = tree only)")
     ap.add_argument("--out")
     args = ap.parse_args()
     root = os.path.abspath(args.root)
@@ -270,31 +393,54 @@ def main():
 
     c = Collector()
     is_repo = bool(git(root, "rev-parse", "--git-dir"))
-    tracked = set()
+    tracked, ign_files, ign_dirs = set(), set(), set()
     if is_repo:
         out = git(root, "ls-files", "-z") or ""
         tracked = {p for p in out.split("\0") if p}
+        ign_files, ign_dirs = git_ignored(root)
+
+    def state_of(rel):
+        if not is_repo:
+            return "norepo"
+        if rel in tracked:
+            return "tracked"
+        if rel in ign_files or any(rel.startswith(d + "/") for d in ign_dirs):
+            return "ignored"
+        return "untracked"
 
     scanned = 0
+    pruned = []
     for dp, dns, fns in os.walk(root):
         rel_dir = os.path.relpath(dp, root).replace(os.sep, "/")
+        rel_dir = "" if rel_dir == "." else rel_dir
+        parts = rel_dir.split("/") if rel_dir else []
+        web = any(p in WEB_DIRS for p in parts)
         # nested .git inside a web-served folder
-        if ".git" in dns and rel_dir != ".":
-            top = rel_dir.split("/")[0]
-            if top in WEB_DIRS:
-                c.add("nested-git-in-web", "medium", "exposure",
-                      "Git repository inside a web-served folder", rel_dir, None, "tree",
-                      value=rel_dir, fix="Remove the .git folder from what gets deployed.")
-        dns[:] = [d for d in dns if d not in SKIP_DIRS]
+        if ".git" in dns and web:
+            c.add("nested-git-in-web", "medium", "exposure",
+                  "Git repository inside a web-served folder", rel_dir, None, "tree",
+                  value=rel_dir, fix="Remove the .git folder from what gets deployed.")
+        keep = []
+        for d in sorted(dns):
+            sub = f"{rel_dir}/{d}" if rel_dir else d
+            if d in SKIP_DIRS:
+                continue
+            bundle = d in BUILD_DIRS and is_web_bundle(os.path.join(dp, d))
+            if d in BUILD_DIRS and not bundle:
+                continue  # compiler output, not something a browser downloads
+            if sub in ign_dirs and not bundle and d not in WEB_DIRS and not has_web_child(
+                    os.path.join(dp, d)):
+                pruned.append(sub)
+                continue
+            keep.append(d)
+        dns[:] = keep
         for fn in fns:
             full = os.path.join(dp, fn)
-            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            rel = f"{rel_dir}/{fn}" if rel_dir else fn
             ext = os.path.splitext(fn)[1].lower()
-            top = rel.split("/")[0]
-            is_tracked = rel in tracked
+            state = state_of(rel)
 
-            if top in WEB_DIRS and "/" in rel and (
-                    ext in {".map", ".bak", ".old", ".zip", ".sql"} or ENV_RE.match(fn)):
+            if web and (ext in {".map", ".bak", ".old", ".zip", ".sql"} or ENV_RE.match(fn)):
                 c.add("web-folder-exposure", "medium", "exposure",
                       "Source map, backup or dump inside a web-served folder", rel, None,
                       "tree", value=rel,
@@ -302,32 +448,37 @@ def main():
 
             env_private = False
             if ENV_RE.match(fn) and not ENV_EXAMPLE_RE.search(fn):
-                if is_tracked:
-                    if env_has_real_values(full):
+                if state == "tracked":
+                    kind = env_kind(full)
+                    if kind == "secret":
                         c.add("env-committed", "critical", "secret",
-                              "Environment file with real values is committed", rel, None,
+                              "Environment file with real secrets is committed", rel, None,
                               "tree", value=rel, needs_rotation=True,
-                              fix="Untrack it, rotate every value in it, keep only .env.example.")
+                              fix="Untrack it, rotate every secret in it, keep only .env.example.")
+                    elif kind == "config":
+                        c.add("env-committed", "medium", "config",
+                              "Environment file is committed (config values, no secret-looking keys)",
+                              rel, None, "tree", value=rel,
+                              fix="Untrack it and keep .env.example; becomes critical once a secret is added.")
                     else:
                         c.add("env-committed-empty", "weak", "hygiene",
                               "Environment file is committed (placeholders only)", rel,
                               None, "tree", value=rel,
                               fix="Rename to .env.example and ignore the real file.")
-                elif is_repo and not git(root, "check-ignore", "-q", "--", rel, check=True):
+                elif state == "untracked":
                     c.add("env-not-ignored", "medium", "config",
                           "Environment file is not ignored by git", rel, None, "tree",
                           value=rel, fix="Add it to .gitignore before the first commit.")
-                elif is_repo:
-                    # untracked and git-ignored: this is where secrets belong; the
-                    # tree scan skips it (git history is still scanned)
+                elif state == "ignored":
+                    # where secrets belong; history is still scanned
                     env_private = True
 
-            if is_tracked and (fn in KEY_FILE_NAMES or KEY_FILE_RE.search(fn)):
+            if state == "tracked" and (fn in KEY_FILE_NAMES or KEY_FILE_RE.search(fn)):
                 c.add("key-file-committed", "critical", "secret",
                       "Key or credential file is committed", rel, None, "tree",
                       value=rel, needs_rotation=True,
                       fix="Untrack it, rotate the credential, keep it outside the repo.")
-            if is_tracked and DATA_FILE_RE.search(fn):
+            if state == "tracked" and DATA_FILE_RE.search(fn):
                 c.add("data-file-committed", "medium", "data",
                       "Database or dump file is committed", rel, None, "tree", value=rel,
                       fix="Remove from the repo; check what personal data it holds.")
@@ -345,9 +496,7 @@ def main():
                 continue
             scanned += 1
             for lineno, raw in enumerate(data.decode("utf-8", "replace").splitlines(), 1):
-                if len(raw) > MAX_LINE:
-                    continue
-                scan_line(c, raw, rel, lineno, ext)
+                scan_line(c, raw, rel, lineno, ext, state, web)
 
     names = {n.lower() for n in os.listdir(root)}
     if is_repo and ".gitignore" not in names:
@@ -361,19 +510,17 @@ def main():
               value="no-license", fix="Add a license or state that the code is proprietary.")
 
     scopes = ["tree"]
-    history_ok = False
-    if args.history > 0 and is_repo:
-        history_ok = scan_history(root, args.history, c)
-        if history_ok:
-            scopes.append("history")
+    if args.history > 0 and is_repo and scan_history(root, args.history, c, tracked):
+        scopes.append("history")
 
     result = {
         "root": root,
         "scanned_files": scanned,
         "is_git_repo": is_repo,
         "scopes": scopes,
+        "skipped_ignored_dirs": pruned[:30],
         "findings": sorted(c.findings.values(),
-                           key=lambda f: ("critical", "medium", "weak").index(f["severity"])),
+                           key=lambda f: SEVERITY_ORDER.index(f["severity"])),
         "hints": sorted(c.hints.values(), key=lambda h: -h["count"]),
     }
     text = json.dumps(result, ensure_ascii=False, indent=2)

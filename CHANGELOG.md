@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.08 - 2026-10-15
+- scan_secrets.py: severity follows git state (tracked = critical; untracked, ignored or no git = medium/weak with a trigger); git-ignored folders are not walked; deployable web build output (dist/build/out with index.html) is now scanned, including minified lines, and source maps there are reported at any depth; committed `.env` with config values only is medium, not critical; `.env` files removed from the tree but left in git history are found; history scan is on by default (300 commits); passwords are masked without a prefix; hint excerpts are redacted; Hugging Face tokens.
+- gate.py: agent severities are normalised (`Critical`, `high`, unknown) so nothing silently drops out of the gate; `--ingest-md` reads the JSON block of an agent report; `--rate` re-rates with evidence and survives re-scans; a manual close sticks across re-scans; `--reopen`.
+- inventory.py: manifest and README heads are redacted with the scanner rules (`POSTGRES_PASSWORD: ...`, provider keys); git-ignored folders are left out of counts.
+- SKILL.md: exact script commands per phase, `state.json` schema, one-question-batch setup with defaults for autopilot, scan-all-first for more than two projects, re-rating through gate.py only.
+- 10 new regression tests.
+
 ## 0.07 - 2026-10-15
 - Scoring discipline in rubrics/potential.md after the first v0.06 run (four of five projects scored the same 12/25); red flags for anchoring and lines-of-code hours.
 

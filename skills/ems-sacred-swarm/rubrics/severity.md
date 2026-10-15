@@ -35,3 +35,8 @@ When unsure between two levels for anything touching secrets, user data or authe
 | `hygiene` | weak |
 
 Secrets: removing from code is not closing. Rotate the key, then close with evidence.
+
+## Git state decides whether a secret leaked
+
+12. A real key that git tracks (now or in history) is critical. The same key in an untracked, not-ignored file is medium ("critical once committed"); in a git-ignored file it is weak; in a folder without git it is medium ("critical when the folder is shared, sold or pushed"). Inside deployable web build output it is medium even when ignored ("critical once deployed"). `scan_secrets.py` applies this; agents follow it too.
+13. A `.env` committed with config values only (ports, hosts, log level) is medium; with a secret-like key holding a real value it is critical.

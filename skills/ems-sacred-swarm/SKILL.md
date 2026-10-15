@@ -35,7 +35,23 @@ Ask, with AskUserQuestion where it fits:
 - security first pass: scripts, Haiku, or both;
 - **the developer's honest numbers:** calendar span, real hours per week, number of people, hours already spent, whether the work will continue. These feed the effort estimate; git only shows when commits happened.
 
+Ask everything in **one** AskUserQuestion call (up to 4 questions), not one by one. If the user says "just run it" or is away, use the defaults: autopilot, economy, lean, research S+M, scripts for security, and list the unanswered developer numbers as a gap.
+
+Save the answers to `<out>/state.json`:
+
+```json
+{"date": "YYYY-MM-DD", "country": "", "city": "", "language": "ru",
+ "currency": {"base": "USD", "local": "KZT", "rate": null, "rate_date": null, "rate_source": null},
+ "mode": "step|autopilot", "preset": "economy", "lean": true, "levels": ["S", "M"],
+ "web_search": true, "gh": false,
+ "projects": {"<slug>": {"root": "D:/path", "fingerprint": null, "phases_done": [],
+              "developer": {"span": null, "hours_per_week": null, "people": null,
+                            "hours_spent": null, "continues": null}}}}
+```
+
 Then print the run plan: `python <skill>/scripts/run_plan.py --projects N --preset P --levels S,M,L` (number of agent runs by model, no invented token counts).
+
+**More than two projects:** default to "scan all first" (phases 1-2 for every project, then a comparison table on screen, the user or the autopilot picks up to 3 for phases 3-8). Projects with no product intent (a personal script, a mod for friends) get phases 1-3 and 7 only; say so in the table.
 
 ## Presets (role -> model)
 
@@ -64,14 +80,29 @@ Lean option: when readiness is below 15/40 or the preset is economy, run apprais
 
 Gate (2) runs before 3-8; with status BLOCK only phase 7 may run.
 
+## Scripts per phase (run them, do not improvise)
+
+`S=<skill>/scripts`, `O=<out>/<slug>`, `P=<project root>`. Scripts are read-only on the project.
+
+| Phase | Command | Then |
+|-------|---------|------|
+| 1 | `python S/inventory.py P --out O/inventory.json` | compare `fingerprint` with `state.json`; equal = offer to reuse phases 1-2 |
+| 2 | `python S/scan_secrets.py P --out O/scan.json` (history: last 300 commits by default; `--history 0` = tree only) | `python S/gate.py O --ingest O/scan.json --source script` |
+| 2 | security agent report saved as `O/phases/02-security.md` | `python S/gate.py O --ingest-md O/phases/02-security.md` |
+| 2 | you re-rate after opening the cited lines | `python S/gate.py O --rate ID --severity medium --evidence "what the source shows"` |
+| any | after saving a phase file | `python S/verify_evidence.py P O/phases/<file>.md` |
+| 6 | export on request | `python S/export_report.py O/REPORT-FULL.md --txt --docx` |
+
+Scanner severity already depends on git state: a key that git tracks is `critical`; the same key in an untracked file, a git-ignored file or a folder without git is `medium`/`weak` with its trigger ("critical once committed"). Git-ignored folders are not walked, except deployable web build output (`dist`, `build`, `out` with an `index.html`).
+
 ## Phase protocol
 
 1. **Card** (step mode): agents, goal, models, what they read, what goes online, number of runs. Ask: run / skip / change model.
 2. **Gate:** `python <skill>/scripts/gate.py <out>/<slug>`.
-3. **Run:** Agent tool, `subagent_type: "Explore"`, model from the preset. Prompt = `agents/_common.md` + role file + exact input paths + report language + currency table. Independent agents in parallel (up to 5), dependent ones in sequence.
-4. **Verify and re-rate:** save the text, run `verify_evidence.py` (bad tag = wrong claim: re-check). Agent severities are proposals: open the cited lines of every critical and downgrade what is not proven (`rubrics/severity.md`). Run the referee before any number leaves research.
-5. **Save** files yourself (sub-agents cannot write report files).
-6. **Screen and checkpoint:** print the phase result in the chat; then summary, 1-3 pieces of advice, open medium findings, new ideas to `ideas.md`, and the question (continue / deeper / stop).
+3. **Run:** Agent tool, `subagent_type: "Explore"`, model from the preset. Prompt = `agents/_common.md` + role file + exact input paths + report language + currency table. Independent agents in parallel (up to 5), dependent ones in sequence. Give file paths, never paste whole files into the prompt; cap the answer by the role's word limit. If sub-agents have no WebSearch in this harness, run research yourself with the same role prompt and caps.
+4. **Verify and re-rate:** save the text, run `verify_evidence.py` (bad tag = wrong claim: re-check). Agent severities are proposals: open the cited lines of every critical and downgrade what is not proven with `gate.py --rate` (`rubrics/severity.md`). Never edit `findings.json` by hand. Run the referee before any number leaves research.
+5. **Save** files yourself (sub-agents cannot write report files). Update `state.json` (`phases_done`, `fingerprint`).
+6. **Screen and checkpoint:** print the phase result in the chat; then summary, 1-3 pieces of advice, open medium findings, new ideas to `ideas.md`, and the question (continue / deeper / stop). In autopilot print the same and continue.
 
 ## Potential and verdict (phase 5)
 
@@ -87,8 +118,9 @@ Rubric `rubrics/severity.md`; findings in `<out>/<slug>/findings.json`, managed 
 | medium | Repeated at every checkpoint until closed |
 | critical | BLOCK: only phase 7 may run |
 
-- No override for critical. A leaked secret is closed only after rotation: `gate.py <dir> --close ID --evidence "..."`.
-- A script finding you proved false is closed the same way with the proof as evidence (and fix the scanner rule).
+- No override for critical. A leaked secret is closed only after rotation: `gate.py <dir> --close ID --evidence "..."`. A manual close sticks across re-scans (the rotated key stays in history; that is fine once it is dead); `--reopen ID` undoes it.
+- A script finding you proved false is closed the same way with the proof as evidence (and fix the scanner rule). A finding that is real but over-rated is re-rated with `--rate`, which re-scans keep.
+- Agents may write `Critical`, `high` or an unknown level: `gate.py` maps them (`high` = critical, unknown = medium with `severity_raw` kept) so nothing silently drops out of the gate.
 - Ideas the user does not want to do now go to `ideas.md`; the gate still applies.
 
 ## Economy
@@ -122,3 +154,6 @@ Exports: `python <skill>/scripts/export_report.py <file.md> --txt --docx` (txt a
 | "Every project scored 12/25" | Anchoring. Re-check each criterion against its anchors (rubrics/potential.md). |
 | "Hours from lines of code" | Use git active days and ask the developer; lines are a weak proxy. |
 | "Run all three research levels, just in case" | Show the plan and let the user choose. |
+| "I'll just fix the severity in findings.json" | `gate.py --rate` with evidence; hand edits are lost on the next scan. |
+| "The scanner found a key in an ignored file, BLOCK" | Not leaked. Weak or medium with its trigger; check git state first. |
+| "Ten projects, full run each" | Scan all first, compare, go deep on up to 3. |
