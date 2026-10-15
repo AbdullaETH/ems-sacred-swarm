@@ -5,6 +5,7 @@
 - agent_prompt.py: builds the exact sub-agent prompt (common rules + role + only the asked research level + compact inventory/scan digest + region/currency from state.json + allowed phase files). Sub-agents get ~1k tokens of prompt instead of pasted context; the orchestrator passes only the prompt file path.
 - verify_evidence.py: comma-separated line lists (`file:5,22-24`); `snippet` and dates inside URL tags are annotations, not paths.
 - Godot (`.gd`) scripts and tests are counted; eval-exec hint matches builtin calls only (no `regex.exec()` / `model.eval()`).
+- Sale price is never empty: value ladder rows now / after small fixes / maximum, each with the work and hours it takes; no revenue = rebuild cost x buyer discount, revenue = profit x dated marketplace multiple (Flippa H1 2026: 2.47x average, 4.06x top quartile); ranked list of what raises the price most per hour. Screen card and short report show it.
 - Run on 4 real projects end to end (phases 0-8) and 14 projects for phases 1-2.
 
 ## 0.08 - 2026-10-15
