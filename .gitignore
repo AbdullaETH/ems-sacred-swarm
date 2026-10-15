@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+# audit output must never be committed
+ems-sacred-swarm-output/
+findings.json
+scan.json
+inventory.json
