@@ -21,6 +21,12 @@ Adopters x price, per year, low / base / high, in USD and the local currency. Ad
 | Differentiation | nothing different | one real difference, easy to copy | hard-to-copy difference with proof |
 | Time to first sale | more than 12 months | 3-12 months | under 3 months |
 
+Scoring discipline (learned in the first full run, where four of five projects landed on exactly 12/25):
+- Every score names the input that justifies it (a number, a grade, a source). A score without an input is not allowed.
+- Do not default to 2 or 3. Start from the anchor row that the evidence matches and move only with a stated reason.
+- If the total lands on a verdict boundary (12 or 18), re-check each criterion against its anchors and state which single point would flip the verdict.
+- When several projects are scored in one queue, the orchestrator compares totals; identical totals trigger a re-check of the scoring, not a shrug.
+
 Verdict: **стрельнёт** 18-25; **при условии** 12-17 (list the conditions); **не стрельнёт в нынешнем виде** 0-11. Confidence = share of inputs with grade A/B: high above 70%, medium 40-70%, low below. Name the single biggest unknown.
 
 ## 5. Effort and time

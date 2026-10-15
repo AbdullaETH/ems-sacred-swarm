@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.07 - 2026-10-15
+- Scoring discipline in rubrics/potential.md after the first v0.06 run (four of five projects scored the same 12/25); red flags for anchoring and lines-of-code hours.
+
 ## 0.06 - 2026-10-15
 - Output on screen first (screen card), files second; answers one question: will it take off, for whom, at what price, what to fix first.
 - Audience-first analysis: bottom-up funnel (sizer), willingness to pay, potential revenue, five criteria and a verdict (potential), value ladder; cost to rebuild is only a floor.
